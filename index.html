@@ -70,15 +70,20 @@ main{padding:14px;max-width:900px;margin:auto}
 </header>
 <main>
 <div class="status" id="status">Firebaseに接続中…</div>
+<div id="finishNotice"></div>
 <div class="summary">
 <div class="summary-label">最短で終了するグループまで</div>
 <div class="summary-time" id="shortest">--:--</div>
 <div class="small" id="shortestName" style="color:#fff;opacity:.8">実行中のグループなし</div>
 </div>
 <div class="lanes">
-<div class="lane"><div class="lane-title">レーンA</div><div class="lane-count" data-lane-count="A">0組</div><div class="lane-groups" data-lane-groups="A"><div class="lane-empty">未割り当て</div></div></div>
-<div class="lane"><div class="lane-title">レーンB</div><div class="lane-count" data-lane-count="B">0組</div><div class="lane-groups" data-lane-groups="B"><div class="lane-empty">未割り当て</div></div></div>
-<div class="lane"><div class="lane-title">レーンC</div><div class="lane-count" data-lane-count="C">0組</div><div class="lane-groups" data-lane-groups="C"><div class="lane-empty">未割り当て</div></div></div>
+<div class="lane"><div class="lane-title">レーンA</div><div class="lane-count" data-lane-count="A">0組（最大2組）</div><div class="lane-groups" data-lane-groups="A"><div class="lane-empty">未割り当て</div></div></div>
+<div class="lane"><div class="lane-title">レーンB</div><div class="lane-count" data-lane-count="B">0組（最大2組）</div><div class="lane-groups" data-lane-groups="B"><div class="lane-empty">未割り当て</div></div></div>
+<div class="lane"><div class="lane-title">レーンC</div><div class="lane-count" data-lane-count="C">0組（最大2組）</div><div class="lane-groups" data-lane-groups="C"><div class="lane-empty">未割り当て</div></div></div>
+</div>
+<div class="ranking" id="ranking">
+<h2>🏆 タイマー終了ランキング</h2>
+<div id="rankingList" class="small">まだ終了したグループはいません。</div>
 </div>
 <div class="waiting">
 <div class="waiting-head"><div class="waiting-title">🧍 待ち組</div><div class="waiting-count" id="waitingCount">0</div></div>
@@ -147,6 +152,8 @@ function render(data){
   renderSummary(data);
   renderLanes(data);
   renderWaiting(data);
+  renderRanking(data);
+  showFinishNotice(data);
   list.innerHTML="";
   const entries=Object.entries(data).filter(([,g])=>isGroup(g)).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0));
   if(!entries.length){
@@ -207,12 +214,20 @@ function renderSummary(data){
   el.textContent=formatTime(getRemainingMs(g));
   nm.textContent=(g.name||"名称未設定")+" が最短";
 }
+function getLaneGroups(data,lane){
+  return Object.values(data).filter(g=>isGroup(g)&&g.lane===lane&&!g.finishedAt)
+    .sort((a,b)=>(a.laneAssignedAt||a.createdAt||0)-(b.laneAssignedAt||b.createdAt||0));
+}
 function renderLanes(data){
   ["A","B","C"].forEach(lane=>{
-    const groups=Object.values(data).filter(g=>isGroup(g)&&g.lane===lane);
-    document.querySelector(`[data-lane-count="${lane}"]`).textContent=groups.length+"組";
+    const groups=getLaneGroups(data,lane);
+    document.querySelector(`[data-lane-count="${lane}"]`).textContent=groups.length+"組（最大2組）";
     const box=document.querySelector(`[data-lane-groups="${lane}"]`);
-    box.innerHTML=groups.length ? groups.map(g=>`<div>・${esc(g.name||"名称未設定")}</div>`).join("") : '<div class="lane-empty">未割り当て</div>';
+    if(!groups.length){box.innerHTML='<div class="lane-empty">空き</div>';return;}
+    box.innerHTML=groups.map((g,i)=>{
+      const status=i===0?"▶ 体験中":"⏳ 体験待ち";
+      return `<div style="margin-bottom:7px"><b>${i+1}. ${esc(g.name||"名称未設定")}</b><div class="lane-status">${status}</div></div>`;
+    }).join("");
   });
 }
 function renderWaiting(data){
@@ -221,12 +236,69 @@ function renderWaiting(data){
   const box=document.getElementById("waitingList"); box.innerHTML="";
   items.forEach(([id,g],i)=>{
     const row=document.createElement("div"); row.className="wait-item";
-    row.innerHTML=`<div class="wait-item-name">${i+1}. ${esc(g.name||"名称未設定")}</div><button class="primary">案内済み</button>`;
-    row.querySelector("button").onclick=()=>groupsRef.child(id).remove();
+    row.innerHTML=`<div class="wait-item-name">${i+1}. ${esc(g.name||"名称未設定")}</div>
+      <select class="wait-lane">
+        <option value="">レーン選択</option>
+        <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+      </select>
+      <button class="primary">案内済み</button>`;
+    const select=row.querySelector(".wait-lane");
+    row.querySelector("button").onclick=()=>guideWaiting(id,g,select.value);
     box.appendChild(row);
   });
 }
+function renderRanking(data){
+  const finished=Object.values(data).filter(g=>isGroup(g)&&g.finishedAt)
+    .sort((a,b)=>(Number(b.finishedStage ?? b.stage)||0)-(Number(a.finishedStage ?? a.stage)||0) || (a.finishedAt||0)-(b.finishedAt||0))
+    .slice(0,5);
+  const box=document.getElementById("rankingList");
+  if(!finished.length){box.innerHTML='<div class="small">まだ終了したグループはいません。</div>';return;}
+  box.innerHTML=finished.map((g,i)=>`<div class="rank-row">
+    <div class="rank-num">${i+1}位</div>
+    <div class="rank-name">${esc(g.name||"名称未設定")} <span class="small">（レーン${esc(g.lane||"-")}）</span></div>
+    <div class="rank-stage">${Number(g.finishedStage ?? g.stage ?? 0)}ステージ</div>
+  </div>`).join("");
+}
+
+function showFinishNotice(data){
+  const finished=Object.entries(data).filter(([,g])=>isGroup(g)&&g.finishedAt)
+    .sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0));
+  const box=document.getElementById("finishNotice");
+  if(!finished.length){box.innerHTML="";return;}
+  const latest=finished[0][1];
+  box.innerHTML=`<div class="notice">🔔 <b>タイマー終了</b><br>
+    レーン${esc(latest.lane||"-")}・${esc(latest.name||"名称未設定")} が終了しました。<br>
+    <span class="small">終了時ステージ：${Number(latest.stage||0)}ステージ</span></div>`;
+}
+
+function guideWaiting(id,g,lane){
+  if(!lane)return alert("案内するレーンを選んでください。");
+  const occupied=getLaneGroups(latestData,lane);
+  if(occupied.length>=2){
+    return alert(`レーン${lane}は「体験中1組＋体験待ち1組」で満員です。\nどちらかが終了してから案内してください。`);
+  }
+  const duplicate=Object.values(latestData).some(x=>x&&x.name===g.name&&x.type!=="waiting");
+  if(duplicate)return alert(`⚠️「${g.name}」という名前はすでに使われています。`);
+  const now=Date.now();
+  groupsRef.child(id).set({
+    type:"group",name:g.name,stage:0,limitSec:300,remainingMs:300000,
+    startAt:null,createdAt:g.createdAt||now,lane:lane,laneAssignedAt:now
+  });
+}
+
+function finishExpiredTimers(){
+  const now=Date.now();
+  Object.entries(latestData).forEach(([id,g])=>{
+    if(isGroup(g)&&g.startAt&&getRemainingMs(g,now)<=0&&!g.finishedAt){
+      groupsRef.child(id).update({
+        remainingMs:0,startAt:null,finishedAt:now,finishedStage:Number(g.stage||0)
+      });
+    }
+  });
+}
+
 setInterval(()=>{
+  finishExpiredTimers();
   document.querySelectorAll("[data-timer]").forEach(el=>{
     const id=el.dataset.timer, g=latestData[id];
     if(g) el.textContent=formatTime(getRemainingMs(g));
@@ -241,14 +313,14 @@ async function act(id,g,action,card){
   if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")) await ref.update({stage:0});
   if(action==="start"){
     const rem=getRemainingMs(g);
-    await ref.update({remainingMs:rem,startAt:Date.now(),limitSec:Math.max(1,Math.round(getLimitMs(g)/1000))});
+    await ref.update({remainingMs:rem,startAt:Date.now(),limitSec:Math.max(1,Math.round(getLimitMs(g)/1000)),finishedAt:null,finishedStage:null});
   }
   if(action==="stop"&&g.startAt){
     const rem=getRemainingMs(g);
     await ref.update({remainingMs:rem,startAt:null});
   }
   if(action==="timerReset"&&confirm("このグループの残り時間を制限時間に戻しますか？")){
-    await ref.update({remainingMs:getLimitMs(g),startAt:null});
+    await ref.update({remainingMs:getLimitMs(g),startAt:null,finishedAt:null,finishedStage:null});
   }
   if(action==="setLimit"){
     const input=card.querySelector("[data-limit]");
@@ -260,7 +332,14 @@ async function act(id,g,action,card){
   }
   if(action==="setLane"){
     const select=card.querySelector("[data-lane-select]");
-    await ref.update({lane:select?select.value:""});
+    const lane=select?select.value:"";
+    if(lane){
+      const occupied=getLaneGroups(latestData,lane).filter(x=>x.name!==g.name);
+      if(occupied.length>=2){
+        return alert(`レーン${lane}は「体験中1組＋体験待ち1組」で満員です。`);
+      }
+    }
+    await ref.update({lane:lane,laneAssignedAt:lane?Date.now():null});
   }
   if(action==="delete"&&confirm("このグループを削除しますか？")) await ref.remove();
 }
@@ -272,6 +351,8 @@ document.getElementById("waitingName").addEventListener("keydown",e=>{if(e.key==
 async function addGroup(){
   const input=document.getElementById("name"), name=input.value.trim();
   if(!name)return alert("グループ名を入力してください。");
+  const duplicate=Object.values(latestData).some(g=>g&&String(g.name||"").trim()===name);
+  if(duplicate)return alert(`⚠️「${name}」は被ってます！\\n同じ名前のグループ（または待ち組）がすでにあります。`);
   const now=Date.now(), sec=300;
   await groupsRef.push({type:"group",name,stage:0,limitSec:sec,remainingMs:sec*1000,startAt:null,createdAt:now,lane:""});
   input.value="";
@@ -279,6 +360,8 @@ async function addGroup(){
 async function addWaiting(){
   const input=document.getElementById("waitingName"), name=input.value.trim();
   if(!name)return alert("待ち組の名前を入力してください。");
+  const duplicate=Object.values(latestData).some(g=>g&&String(g.name||"").trim()===name);
+  if(duplicate)return alert(`⚠️「${name}」は被ってます！\\n同じ名前のグループ（または待ち組）がすでにあります。`);
   await groupsRef.push({type:"waiting",name,createdAt:Date.now()});
   input.value="";
 }
