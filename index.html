@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>1-B 文化祭 グループ管理</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:#f4f6f8;color:#17202a}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #ddd;padding:14px 16px}
+h1{font-size:22px;margin:0 0 10px}
+.add{display:flex;gap:8px}
+input{font:inherit;border:1px solid #c8cdd3;border-radius:10px;padding:12px;background:#fff}
+#name{flex:1;min-width:0}
+button{font:inherit;border:0;border-radius:10px;padding:11px 14px;font-weight:700;background:#e9edf2}
+.primary{background:#1769e0;color:#fff}
+.danger{background:#d93025;color:#fff}
+main{padding:14px;max-width:900px;margin:auto}
+.status{font-size:13px;margin:4px 0 12px;color:#5f6368}
+.card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:15px;margin-bottom:12px;box-shadow:0 2px 7px #0000000d}
+.top{display:flex;align-items:center;gap:8px}
+.group-name{font-size:20px;font-weight:800;flex:1;overflow-wrap:anywhere}
+.stage{font-size:48px;font-weight:900;text-align:center;margin:8px 0}
+.stage-label{text-align:center;color:#666;font-size:13px}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
+.controls button{min-height:54px}
+.timer{font-variant-numeric:tabular-nums;text-align:center;font-size:30px;font-weight:800;margin:8px 0}
+.timer-controls{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.small{font-size:12px;color:#666}
+.empty{text-align:center;padding:40px 15px;color:#777}
+@media(max-width:520px){.controls{grid-template-columns:1fr 1fr}.controls .reset{grid-column:1/-1}.stage{font-size:42px}}
+</style>
+</head>
+<body>
+<header>
+<h1>🎪 1-B 文化祭 グループ管理</h1>
+<div class="add">
+<input id="name" placeholder="グループ名（例：Aグループ）" autocomplete="off">
+<button class="primary" id="addBtn">追加</button>
+</div>
+</header>
+<main>
+<div class="status" id="status">Firebaseに接続中…</div>
+<div id="list"></div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDxGXjcovsjKm5S2a-KicwYfCxplDzngk",
+  authDomain: "exit1b.firebaseapp.com",
+  databaseURL: "https://exit1b-default-rtdb.firebaseio.com",
+  projectId: "exit1b",
+  storageBucket: "exit1b.firebasestorage.app",
+  messagingSenderId: "165232048524",
+  appId: "1:165232048524:web:9e9817e8a2cb95e05ffea9"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db=firebase.database();
+const groupsRef=db.ref("groups");
+const list=document.getElementById("list");
+const status=document.getElementById("status");
+
+groupsRef.on("value",snap=>{
+  const data=snap.val()||{};
+  render(data);
+  status.textContent="🟢 接続中・全端末でリアルタイム共有";
+},err=>{
+  console.error(err);
+  status.textContent="🔴 データベースに接続できません。Firebaseのルールを確認してください。";
+});
+
+function render(data){
+  list.innerHTML="";
+  const entries=Object.entries(data).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0));
+  if(!entries.length){
+    list.innerHTML='<div class="empty">まだグループがありません。上から追加してください。</div>';
+    return;
+  }
+  for(const [id,g] of entries){
+    const card=document.createElement("section");
+    card.className="card";
+    card.innerHTML=`
+      <div class="top">
+        <div class="group-name">${esc(g.name||"名称未設定")}</div>
+        <button class="danger" data-action="delete">削除</button>
+      </div>
+      <div class="stage-label">現在のステージ</div>
+      <div class="stage">${Number(g.stage||0)}</div>
+      <div class="controls">
+        <button data-action="minus">− 1</button>
+        <button class="primary" data-action="plus">＋ 1</button>
+        <button class="reset" data-action="reset">ステージを0に戻す</button>
+      </div>
+      <hr style="border:0;border-top:1px solid #eee;margin:15px 0">
+      <div class="stage-label">入場からの経過時間</div>
+      <div class="timer" data-timer="${id}">${formatElapsed(g)}</div>
+      <div class="timer-controls">
+        <button class="primary" data-action="start">${g.startAt?"タイマー再開":"タイマー開始"}</button>
+        <button data-action="stop">停止</button>
+        <button data-action="timerReset">時間を0に戻す</button>
+      </div>
+      <div class="small" style="text-align:center;margin-top:8px">※操作内容はすべてのiPadに反映されます</div>
+    `;
+    card.querySelectorAll("button").forEach(btn=>{
+      btn.addEventListener("click",()=>act(id,g,btn.dataset.action));
+    });
+    list.appendChild(card);
+  }
+}
+
+function formatElapsed(g){
+  let ms=Number(g.elapsed||0);
+  if(g.startAt)ms+=Date.now()-Number(g.startAt);
+  const s=Math.max(0,Math.floor(ms/1000));
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  return [h,m,sec].map(x=>String(x).padStart(2,"0")).join(":");
+}
+
+setInterval(()=>{
+  document.querySelectorAll("[data-timer]").forEach(el=>{
+    const id=el.dataset.timer;
+    db.ref("groups/"+id).once("value").then(s=>{
+      if(s.exists())el.textContent=formatElapsed(s.val());
+    });
+  });
+},1000);
+
+async function act(id,g,action){
+  const ref=db.ref("groups/"+id);
+  if(action==="plus")await ref.update({stage:Math.max(0,Number(g.stage||0)+1)});
+  if(action==="minus")await ref.update({stage:Math.max(0,Number(g.stage||0)-1)});
+  if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？"))await ref.update({stage:0});
+  if(action==="start")await ref.update({startAt:Date.now(),elapsed:Number(g.elapsed||0)});
+  if(action==="stop"&&g.startAt)await ref.update({elapsed:Number(g.elapsed||0)+(Date.now()-Number(g.startAt)),startAt:null});
+  if(action==="timerReset"&&confirm("このグループの経過時間を0に戻しますか？"))await ref.update({elapsed:0,startAt:null});
+  if(action==="delete"&&confirm("このグループを削除しますか？"))await ref.remove();
+}
+
+document.getElementById("addBtn").onclick=addGroup;
+document.getElementById("name").addEventListener("keydown",e=>{if(e.key==="Enter")addGroup()});
+
+async function addGroup(){
+  const input=document.getElementById("name");
+  const name=input.value.trim();
+  if(!name)return alert("グループ名を入力してください。");
+  const now=Date.now();
+  await groupsRef.push({name,stage:0,elapsed:0,startAt:now,createdAt:now});
+  input.value="";
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+</script>
+</body>
+</html>
