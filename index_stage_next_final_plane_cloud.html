@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>1-B 文化祭 グループ管理・安定版</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:#f4f6f8;color:#17202a}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #ddd;padding:14px 16px}
+h1{font-size:22px;margin:0 0 10px}
+.add,.waiting-add{display:flex;gap:8px}
+input{font:inherit;border:1px solid #c8cdd3;border-radius:10px;padding:12px;background:#fff}
+#name,#waitingName{flex:1;min-width:0}
+button{font:inherit;border:0;border-radius:10px;padding:11px 14px;font-weight:700;background:#e9edf2;cursor:pointer}
+.primary{background:#1769e0;color:#fff}
+.danger{background:#d93025;color:#fff}
+main{padding:14px;max-width:900px;margin:auto}
+.status{font-size:13px;margin:4px 0 12px;color:#5f6368}
+.summary{background:#17202a;color:#fff;border-radius:16px;padding:14px;margin-bottom:12px;text-align:center}
+.summary-label{font-size:13px;opacity:.8}
+.summary-time{font-size:34px;font-weight:900;font-variant-numeric:tabular-nums;margin-top:2px}
+.lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.lane{background:#fff;border:1px solid #ddd;border-radius:14px;padding:10px}
+.lane-title{font-size:16px;font-weight:900;text-align:center}
+.lane-count{text-align:center;font-size:12px;color:#666;margin:3px 0 8px}
+.lane-groups{font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.lane-empty{text-align:center;color:#888;font-size:13px;padding:8px 4px}
+.waiting{background:#fff;border:2px solid #e0a000;border-radius:16px;padding:14px;margin-bottom:12px}
+.waiting-head{display:flex;align-items:center;gap:8px}
+.waiting-title{font-size:18px;font-weight:900;flex:1}
+.waiting-count{font-size:30px;font-weight:900;font-variant-numeric:tabular-nums}
+.waiting-add{margin-top:10px}
+.wait-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #eee}
+.wait-item-name{flex:1;overflow-wrap:anywhere}
+.card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:15px;margin-bottom:12px;box-shadow:0 2px 7px #0000000d}
+.top{display:flex;align-items:center;gap:8px}
+.group-name{font-size:20px;font-weight:800;flex:1;overflow-wrap:anywhere}
+.stage{font-size:48px;font-weight:900;text-align:center;margin:8px 0}
+.stage-label{text-align:center;color:#666;font-size:13px}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
+.controls button{min-height:54px}
+.timer{font-variant-numeric:tabular-nums;text-align:center;font-size:30px;font-weight:800;margin:8px 0}
+.timer-controls{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.limit-row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.limit-row input{width:100px;padding:8px}
+.lane-select{padding:8px;border:1px solid #c8cdd3;border-radius:10px;background:#fff;font:inherit}
+.small{font-size:12px;color:#666}
+.empty{text-align:center;padding:40px 15px;color:#777}
+.finished-area{background:#fff;border:1px solid #ddd;border-radius:14px;padding:10px;margin-bottom:12px}
+.finished-title{font-size:15px;font-weight:900;margin-bottom:7px}
+.finished-list{display:flex;flex-wrap:wrap;gap:6px}
+.finished-item{font-size:12px;background:#f1f3f5;border-radius:9px;padding:7px 9px;min-width:120px}
+.notice{background:#fff3cd;border:2px solid #f0b400;border-radius:14px;padding:12px;margin-bottom:12px;box-shadow:0 2px 8px #00000012}
+@media(min-width:900px) and (orientation:landscape){
+  main{max-width:none;padding:10px 12px}
+  .lanes{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:start}
+  .lane{min-width:0;padding:9px}
+  .lane-groups{max-height:calc(100vh - 250px);overflow-y:auto;padding-right:2px}
+  .lane .card{margin-bottom:8px;padding:11px}
+  .lane .group-name{font-size:17px}
+  .lane .stage{font-size:38px;margin:4px 0}
+  .lane .controls button{min-height:44px;padding:8px 7px}
+  .lane .timer{font-size:25px;margin:5px 0}
+  .lane .timer-controls button{padding:8px 9px}
+  .lane .limit-row{gap:5px}
+  .lane .limit-row input{width:75px}
+}
+@media(max-width:520px){
+  .lanes{grid-template-columns:1fr}
+  .lane{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:4px 10px}
+  .lane-title{text-align:left}
+  .lane-count{text-align:left;margin:0}
+  .lane-groups,.lane-empty{grid-column:1/-1}
+  .controls{grid-template-columns:1fr 1fr}
+  .controls .reset{grid-column:1/-1}
+  .stage{font-size:42px}
+  .waiting-add{flex-direction:column}
+}
+
+/* 3レーン表示用：iPad横向きでA/B/Cを常時横並び */
+@media (orientation:landscape){
+  main{max-width:none}
+  .lanes{grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
+  .lane{min-width:0}
+  .lane-groups{overflow:visible;max-height:none}
+}
+
+/* ステージ表示専用モード */
+body.display-mode{background:#ffd400;color:#000;overflow:hidden}
+body.display-mode header, body.display-mode #finishNotice, body.display-mode .summary,
+body.display-mode #finishedArea, body.display-mode #ranking, body.display-mode .waiting,
+body.display-mode #list, body.display-mode .status{display:none!important}
+body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100vh}
+.display-board{display:grid;grid-template-columns:1fr;width:100vw;height:100vh}
+.display-lane{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  width:100%;
+  height:100%;
+  padding:20px;
+  text-align:center;
+}
+.display-lane-label{font-size:clamp(30px,5vw,64px);font-weight:900;letter-spacing:.08em;color:#000}
+.display-team{
+  font-size:clamp(32px,5.5vw,72px);
+  font-weight:900;
+  margin-top:12px;
+  max-width:95%;
+  overflow-wrap:anywhere;
+  color:#000;
+}
+.display-stage{
+  font-size:clamp(220px,42vw,600px);
+  font-weight:900;
+  line-height:.85;
+  font-variant-numeric:tabular-nums;
+  margin:12px 0;
+  color:#000;
+}
+.display-stage-label{font-size:clamp(22px,3vw,38px);font-weight:800;color:#000}
+.display-timer{
+  font-size:clamp(32px,5vw,64px);
+  font-weight:900;
+  font-variant-numeric:tabular-nums;
+  margin-top:12px;
+  color:#000;
+}
+.display-finished-banner{
+  display:none;
+  font-size:clamp(48px,9vw,110px);
+  font-weight:1000;
+  margin-bottom:10px;
+  white-space:nowrap;
+  color:#000;
+  text-shadow:none;
+}
+.display-lane.is-finished .display-finished-banner{display:block}
+.display-lane.is-finished .display-timer{font-size:clamp(28px,4vw,52px)}
+.display-wait{font-size:clamp(20px,3vw,34px);opacity:.7;color:#000}
+.display-finished{font-size:clamp(24px,3.5vw,44px);font-weight:800;color:#000}
+@media(max-width:700px){
+  .display-board{grid-template-columns:1fr}
+  .display-stage{font-size:clamp(180px,48vw,420px)}
+}
+
+/* 表示専用画面：横から見た飛行機＋飛行機雲 */
+body.display-mode::before{
+  content:"";
+  position:fixed;
+  z-index:0;
+  top:12%;
+  left:-18vw;
+  width:clamp(70px,9vw,125px);
+  height:clamp(30px,4vw,55px);
+  pointer-events:none;
+  opacity:.85;
+  background:#000;
+  clip-path:polygon(
+    0 45%, 18% 45%, 30% 8%, 37% 8%, 32% 45%,
+    70% 45%, 88% 25%, 100% 25%, 100% 75%, 88% 75%,
+    70% 55%, 32% 55%, 37% 92%, 30% 92%, 18% 55%, 0 55%
+  );
+  animation:displayPlaneFlight 12s linear infinite;
+}
+
+body.display-mode::after{
+  content:"";
+  position:fixed;
+  z-index:0;
+  top:calc(12% + clamp(15px,2vw,27px));
+  left:-18vw;
+  width:clamp(120px,16vw,220px);
+  height:clamp(4px,0.7vw,9px);
+  pointer-events:none;
+  opacity:0;
+  border-radius:999px;
+  background:linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255,255,255,.95) 28%,
+    rgba(255,255,255,.9) 72%,
+    transparent 100%
+  );
+  filter:blur(1px);
+  transform-origin:right center;
+  animation:displayContrailFlight 12s linear infinite;
+}
+
+body.display-mode .display-board{
+  position:relative;
+  z-index:1;
+}
+
+@keyframes displayPlaneFlight{
+  0%{
+    transform:translate(0,0) rotate(-12deg);
+  }
+  100%{
+    transform:translate(145vw,-32vh) rotate(-12deg);
+  }
+}
+
+@keyframes displayContrailFlight{
+  0%{
+    transform:translate(0,0) rotate(-12deg);
+    opacity:0;
+  }
+  8%{
+    opacity:.75;
+  }
+  76%{
+    opacity:.75;
+  }
+  84%{
+    opacity:0;
+    transform:translate(145vw,-32vh) rotate(-12deg);
+  }
+  100%{
+    opacity:0;
+    transform:translate(145vw,-32vh) rotate(-12deg);
+  }
+}
+</style>
+</head>
+<body>
+<header>
+<h1>🎪 1-B 文化祭 グループ管理</h1>
+<div class="add">
+<input id="name" placeholder="グループ名（例：Aグループ）" autocomplete="off">
+<button class="primary" id="addBtn">追加</button><button class="danger" id="resetAllBtn">🗑️ 全データを消去</button>
+</div>
+</header>
+<main>
+<div id="displayBoard" class="display-board" style="display:none"></div>
+<div class="status" id="status">🟡 Firebase確認中…</div><div id="buildInfo" class="small" style="margin:-8px 0 10px">安定版・接続診断つき / v2026-09-02-1</div>
+<div id="finishNotice"></div>
+<div class="summary">
+<div class="summary-label">最短で終了するグループまで</div>
+<div class="summary-time" id="shortest">--:--</div>
+<div class="small" id="shortestName" style="color:#fff;opacity:.8">実行中のグループなし</div>
+</div>
+<div class="waiting">
+<div class="waiting-head"><div class="waiting-title">🧍 待ち組</div><div class="waiting-count" id="waitingCount">0</div></div>
+<div class="small">案内した組は「案内済み」で順番に消せます。</div>
+<div class="waiting-add"><input id="waitingName" placeholder="待ち組の名前" autocomplete="off"><button class="primary" id="waitingAddBtn">待ち組に追加</button></div>
+<div id="waitingList"></div>
+</div>
+<div id="list"></div>
+<div class="lanes">
+<div class="lane"><div class="lane-title">レーンA</div><div class="lane-count" data-lane-count="A">0組（最大2組）</div><div class="lane-groups" data-lane-groups="A"><div class="lane-empty">未割り当て</div></div></div>
+<div class="lane"><div class="lane-title">レーンB</div><div class="lane-count" data-lane-count="B">0組（最大2組）</div><div class="lane-groups" data-lane-groups="B"><div class="lane-empty">未割り当て</div></div></div>
+<div class="lane"><div class="lane-title">レーンC</div><div class="lane-count" data-lane-count="C">0組（最大2組）</div><div class="lane-groups" data-lane-groups="C"><div class="lane-empty">未割り当て</div></div></div>
+</div>
+<div class="finished-area" id="finishedArea"><div class="finished-title">✅ タイマー終了チーム（縮小表示）</div><div id="finishedList" class="finished-list"><span class="small">まだ終了したチームはいません。</span></div></div>
+<div class="ranking" id="ranking">
+<h2>🏆 タイマー終了ランキング</h2>
+<div id="rankingList" class="small">まだ終了したグループはいません。</div>
+</div>
+
+</main>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDxGXjcovsjKm5S2a-KicwYfCxplDzngk",
+  authDomain: "exit1b.firebaseapp.com",
+  databaseURL: "https://exit1b-default-rtdb.firebaseio.com",
+  projectId: "exit1b",
+  storageBucket: "exit1b.firebasestorage.app",
+  messagingSenderId: "165232048524",
+  appId: "1:165232048524:web:9e9817e8a2cb95e05ffea9"
+};
+const displayParam=new URLSearchParams(location.search).get("display");
+const isDisplayMode=["A","B","C"].includes((displayParam||"").toUpperCase());
+if(isDisplayMode){
+  document.body.classList.add("display-mode");
+  document.getElementById("displayBoard").style.display="grid";
+  const displayLanes=[(displayParam||"A").toUpperCase()]; document.getElementById("displayBoard").innerHTML=displayLanes.map(l=>`<div class="display-lane" data-display-lane="${l}"><div class="display-lane-label">レーン${l}</div><div class="display-finished-banner">終了しました</div><div class="display-team">読み込み中…</div><div class="display-stage">0</div><div class="display-stage-label">STAGE</div><div class="display-timer">--:--</div></div>`).join("");
+}
+const list=document.getElementById("list"), status=document.getElementById("status");
+let latestData={};
+let db=null, groupsRef=null, connectedRef=null;
+let firebaseConnected=false;
+let firebaseInitOK=false;
+
+function setStatus(text, kind){
+  if(!status)return;
+  status.textContent=text;
+  status.dataset.kind=kind||"";
+}
+
+function explainFirebaseError(err){
+  console.error("Firebase error:",err);
+  const code=err && err.code ? String(err.code) : "";
+  if(code==="PERMISSION_DENIED" || code==="PERMISSION_DENIED: Permission denied"){
+    return "🔴 Firebaseの読み書き権限が拒否されました。Realtime Databaseのルールを確認してください。";
+  }
+  if(code==="NETWORK_ERROR"){
+    return "🔴 Firebaseへの通信に失敗しました。Wi‑Fi/ネットワークを確認してください。";
+  }
+  return "🔴 Firebase接続エラー: " + (err && err.message ? err.message : "原因を確認できませんでした");
+}
+
+function setConnectionError(message){
+  setStatus(message,"error");
+}
+
+(function initFirebase(){
+  if(!window.firebase || typeof firebase.initializeApp!="function"){
+    setConnectionError("🔴 Firebase SDKを読み込めませんでした。Wi‑Fi接続を確認してページを再読み込みしてください。");
+    return;
+  }
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    firebaseInitOK=true;
+    db=firebase.database();
+    groupsRef=db.ref("groups");
+    connectedRef=db.ref(".info/connected");
+    setStatus("🟡 Firebaseサーバーへ接続確認中…","checking");
+
+    connectedRef.on("value",snap=>{
+      firebaseConnected=snap.val()===true;
+      if(firebaseConnected){
+        setStatus("🟢 Firebase接続OK・全端末でリアルタイム共有","ok");
+      }else{
+        setStatus("🟠 Firebaseサーバーに接続できていません。","waiting");
+      }
+    },err=>setConnectionError(explainFirebaseError(err)));
+
+    groupsRef.on("value",snap=>{
+      latestData=snap.val()||{};
+      render(latestData);
+      if(firebaseConnected) setStatus("🟢 Firebase接続OK・全端末でリアルタイム共有","ok");
+    },err=>setConnectionError(explainFirebaseError(err)));
+
+    // 接続テスト用の一回読み込み。リアルタイム監視とは別なので原因を切り分けやすい。
+    groupsRef.once("value").then(snap=>{
+      latestData=snap.val()||{};
+      render(latestData);
+      if(firebaseConnected || snap.exists() || Object.keys(latestData).length===0){
+        setStatus("🟢 Firebaseデータ取得OK・全端末で共有できます","ok");
+      }
+    }).catch(err=>setConnectionError(explainFirebaseError(err)));
+
+  }catch(err){
+    setConnectionError(explainFirebaseError(err));
+  }
+})();
+
+// 「接続中」のまま永久に止めない。10秒後には必ず状態を確定表示。
+setTimeout(()=>{
+  if(!firebaseInitOK){
+    setConnectionError("🔴 Firebaseを開始できませんでした（SDK読み込みまたは初期化エラー）。");
+  }else if(!firebaseConnected){
+    setStatus("🟠 Firebaseに接続できません。Wi‑Fi、FirebaseのDatabaseルール、またはGitHub Pagesの通信制限を確認してください。","waiting");
+  }
+},10000);
+
+function isWaiting(g){ return g && g.type==="waiting"; }
+function isGroup(g){ return g && !isWaiting(g); }
+
+function getLimitMs(g){
+  let ms=Number(g.limitSec);
+  if(!Number.isFinite(ms)||ms<=0) ms=Number(g.timeLimitSec);
+  if(!Number.isFinite(ms)||ms<=0) ms=300;
+  return ms*1000;
+}
+function getRemainingMs(g,now=Date.now()){
+  // 新形式
+  if(g.remainingMs!==undefined){
+    let ms=Number(g.remainingMs);
+    if(!Number.isFinite(ms)) ms=getLimitMs(g);
+    if(g.startAt) ms-=now-Number(g.startAt);
+    return Math.max(0,ms);
+  }
+  // 旧形式データは経過時間として扱い、デフォルト5分に変換
+  const elapsed=Number(g.elapsed||0);
+  const limit=getLimitMs(g);
+  const running=g.startAt ? elapsed+(now-Number(g.startAt)) : elapsed;
+  return Math.max(0,limit-running);
+}
+function formatTime(ms){
+  const s=Math.max(0,Math.ceil(ms/1000));
+  const m=Math.floor(s/60), sec=s%60;
+  return String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0");
+}
+function renderSummary(data){
+  const running=Object.entries(data).filter(([,g])=>isGroup(g)&&g.startAt&&!g.finishedAt);
+  const el=document.getElementById("shortest");
+  const nm=document.getElementById("shortestName");
+  if(!el||!nm)return;
+  if(!running.length){
+    el.textContent="--:--";
+    nm.textContent="実行中のグループなし";
+    return;
+  }
+  running.sort((a,b)=>getRemainingMs(a[1])-getRemainingMs(b[1]));
+  const [,g]=running[0];
+  el.textContent=formatTime(getRemainingMs(g));
+  nm.textContent=(g.name||"名称未設定")+" が最短";
+}
+function render(data){
+  if(isDisplayMode){ renderDisplay(data); return; }
+  renderSummary(data); renderLanes(data); renderFinished(data);
+  renderWaiting(data); renderRanking(data); showFinishNotice(data);
+  list.innerHTML="";
+  const unassigned=Object.entries(data).filter(([,g])=>isGroup(g)&&!g.finishedAt&&!g.lane)
+    .sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0));
+  if(!unassigned.length){list.innerHTML='<div class="empty">未割り当てのグループはありません。</div>';return;}
+  unassigned.forEach(([id,g])=>list.appendChild(buildGroupCard(id,g)));
+}
+// 表示画面では「次へ」が押されるまで、終了した組を固定表示する。
+const displayFinishedState={};
+
+function renderDisplay(data){
+  [(displayParam||"A").toUpperCase()].forEach(lane=>{
+    const wrap=document.querySelector(`[data-display-lane="${lane}"]`);
+    if(!wrap)return;
+    const team=wrap.querySelector(".display-team");
+    const stage=wrap.querySelector(".display-stage");
+    const timer=wrap.querySelector(".display-timer");
+    const groups=getLaneGroups(data,lane);
+    const currentEntry=groups[0];
+    const current=currentEntry?.g;
+
+    if(!current){
+      displayFinishedState[lane]=null;
+      wrap.classList.remove("is-finished");
+      team.textContent="現在の組はありません";
+      stage.textContent="0";
+      timer.textContent="--:--";
+      return;
+    }
+
+    // 管理画面の「次へ」で現在の組がレーンから外れたときだけ、
+    // このIDが次の組のIDに変わる。タイマー終了だけではIDを変えない。
+    if(displayFinishedState[lane] && displayFinishedState[lane]!==currentEntry.id){
+      displayFinishedState[lane]=null;
+      wrap.classList.remove("is-finished");
+    }
+
+    team.textContent=current.name||"名称未設定";
+    stage.textContent=String(Number(current.stage||0));
+
+    const expired=!!current.finishedAt || (!!current.startAt && getRemainingMs(current)<=0);
+    if(expired){
+      displayFinishedState[lane]=currentEntry.id;
+      wrap.classList.add("is-finished");
+      timer.textContent="00:00";
+    }else if(displayFinishedState[lane]!==currentEntry.id){
+      wrap.classList.remove("is-finished");
+      timer.textContent=formatTime(getRemainingMs(current));
+    }else{
+      // 終了後は管理画面の「次へ」まで終了表示を維持する。
+      wrap.classList.add("is-finished");
+      timer.textContent="00:00";
+    }
+  });
+}
+
+function buildGroupCard(id,g){
+  const card=document.createElement("section"); card.className="card";
+  const limitSec=Math.max(1,Math.round(getLimitMs(g)/1000)), rem=getRemainingMs(g);
+  card.innerHTML=`<div class="top"><div class="group-name">${esc(g.name||"名称未設定")}</div><button class="danger" data-action="delete">削除</button></div>
+  <div class="stage-label">現在のステージ</div><div class="stage">${Number(g.stage||0)}</div>
+  <div class="controls"><button data-action="minus">− 1</button><button class="primary" data-action="plus">＋ 1</button><button class="reset" data-action="reset">ステージを0に戻す</button></div>
+  <hr style="border:0;border-top:1px solid #eee;margin:12px 0"><div class="stage-label">残り時間</div>
+  <div class="timer" data-timer="${id}">${formatTime(rem)}</div>
+  <div class="timer-controls"><button class="primary" data-action="start">${g.startAt?"一時停止から再開":"タイマー開始"}</button><button data-action="stop">停止</button><button data-action="timerReset">時間をリセット</button></div>
+  <div class="limit-row"><span class="small">制限時間（分）</span><input type="number" min="1" step="1" value="${Math.max(1,Math.round(limitSec/60))}" data-limit><button data-action="setLimit">制限時間を変更</button></div>
+  <div class="limit-row"><span class="small">レーン</span><select class="lane-select" data-lane-select><option value="" ${!g.lane?"selected":""}>未割り当て</option><option value="A" ${g.lane==="A"?"selected":""}>A</option><option value="B" ${g.lane==="B"?"selected":""}>B</option><option value="C" ${g.lane==="C"?"selected":""}>C</option></select><button data-action="setLane">レーンを設定</button></div>
+  <div class="small" style="text-align:center;margin-top:6px">※操作内容はすべてのiPadに反映されます</div>`;
+  card.querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>act(id,g,btn.dataset.action,card)));
+  return card;
+}
+function getLaneGroups(data,lane){
+  return Object.entries(data).filter(([,g])=>isGroup(g)&&g.lane===lane)
+    .sort((a,b)=>(a[1].laneAssignedAt||a[1].createdAt||0)-(b[1].laneAssignedAt||b[1].createdAt||0))
+    .map(([id,g])=>({id,g}));
+}
+function renderLanes(data){
+  ["A","B","C"].forEach(lane=>{
+    const groups=getLaneGroups(data,lane);
+    document.querySelector(`[data-lane-count="${lane}"]`).textContent=groups.length+"組（最大2組）";
+    const box=document.querySelector(`[data-lane-groups="${lane}"]`);
+    box.innerHTML="";
+    if(!groups.length){box.innerHTML='<div class="lane-empty">空き</div>';return;}
+    groups.forEach(({id,g},i)=>{
+      const status=document.createElement("div");
+      status.style.cssText="font-size:12px;font-weight:800;margin:4px 2px 2px";
+      status.textContent=i===0 ? (g.finishedAt ? "⏰ 終了・次へ待ち" : "▶ 体験中") : "⏳ 体験待ち";
+      box.appendChild(status);
+      if(i===0 && g.finishedAt){
+        const next=document.createElement("button");
+        next.className="primary";
+        next.textContent="➡️ 次へ";
+        next.style.cssText="width:100%;min-height:52px;margin:4px 0 10px;font-size:18px";
+        next.onclick=()=>advanceLane(lane,id,g);
+        box.appendChild(next);
+      }
+      box.appendChild(buildGroupCard(id,g));
+    });
+  });
+}
+function renderFinished(data){
+  const finished=Object.entries(data).filter(([,g])=>isGroup(g)&&g.finishedAt)
+    .sort((a,b)=>(b[1].finishedAt||0)-(a[1].finishedAt||0));
+  const box=document.getElementById("finishedList");
+  if(!finished.length){box.innerHTML='<span class="small">まだ終了したチームはいません。</span>';return;}
+  box.innerHTML=finished.map(([id,g])=>{
+    const t=new Date(Number(g.finishedAt)).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+    return `<div class="finished-item"><b>${esc(g.name||"名称未設定")}</b><br>レーン${esc(g.finishedLane||g.lane||"-")}・${Number(g.finishedStage??g.stage??0)}ステージ<br><span class="small">${t} 終了</span></div>`;
+  }).join("");
+}
+function renderWaiting(data){
+  const items=Object.entries(data).filter(([,g])=>isWaiting(g)).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0));
+  document.getElementById("waitingCount").textContent=items.length;
+  const box=document.getElementById("waitingList"); box.className="waiting-list-grid"; box.innerHTML="";
+  items.forEach(([id,g],i)=>{
+    const row=document.createElement("div"); row.className="wait-item";
+    row.innerHTML=`<div class="wait-item-name">${i+1}. ${esc(g.name||"名称未設定")}</div>
+      <select class="wait-lane">
+        <option value="">レーン選択</option>
+        <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+      </select>
+      <button class="primary">案内済み</button>`;
+    const select=row.querySelector(".wait-lane");
+    row.querySelector("button").onclick=()=>guideWaiting(id,g,select.value);
+    box.appendChild(row);
+  });
+}
+function renderRanking(data){
+  const finished=Object.values(data).filter(g=>isGroup(g)&&g.finishedAt)
+    .sort((a,b)=>(Number(b.finishedStage ?? b.stage)||0)-(Number(a.finishedStage ?? a.stage)||0) || (a.finishedAt||0)-(b.finishedAt||0))
+    .slice(0,5);
+  const box=document.getElementById("rankingList");
+  if(!finished.length){box.innerHTML='<div class="small">まだ終了したグループはいません。</div>';return;}
+  box.innerHTML=finished.map((g,i)=>`<div class="rank-row">
+    <div class="rank-num">${i+1}位</div>
+    <div class="rank-name">${esc(g.name||"名称未設定")} <span class="small">（レーン${esc(g.finishedLane||g.lane||"-")}）</span></div>
+    <div class="rank-stage">${Number(g.finishedStage ?? g.stage ?? 0)}ステージ</div>
+  </div>`).join("");
+}
+
+let lastNoticeFinishAt=0;
+function showFinishNotice(data){
+  const finished=Object.entries(data).filter(([,g])=>isGroup(g)&&g.finishedAt)
+    .sort((a,b)=>(b[1].finishedAt||0)-(a[1].finishedAt||0));
+  const box=document.getElementById("finishNotice");
+  if(!box)return;
+  if(!finished.length){box.innerHTML="";return;}
+  const latest=finished[0][1];
+  const when=Number(latest.finishedAt||0);
+  box.innerHTML=`<div class="notice">🔔 <b>タイマー終了！</b><br>
+    レーン${esc(latest.lane||"-")}・${esc(latest.name||"名称未設定")} が終了しました。<br>
+    <span class="small">終了時ステージ：${Number(latest.finishedStage ?? latest.stage ?? 0)}ステージ</span>
+  </div>`;
+  if(when>lastNoticeFinishAt){
+    lastNoticeFinishAt=when;
+    try{ if("Notification" in window && Notification.permission==="granted") new Notification("タイマー終了",{body:`レーン${latest.lane||"-"}・${latest.name||"名称未設定"} が終了しました。`}); }catch(e){}
+    if("Notification" in window && Notification.permission==="default"){
+      try{Notification.requestPermission().catch(()=>{});}catch(e){}
+    }
+    setTimeout(()=>{ if(Number(latest.finishedAt||0)===lastNoticeFinishAt) box.innerHTML=""; },8000);
+  }
+}
+
+function guideWaiting(id,g,lane){
+  if(!lane)return alert("案内するレーンを選んでください。");
+  const occupied=getLaneGroups(latestData,lane);
+  if(occupied.length>=2){
+    return alert(`レーン${lane}は「体験中1組＋体験待ち1組」で満員です。\nどちらかが終了してから案内してください。`);
+  }
+  const duplicate=Object.values(latestData).some(x=>x&&x.name===g.name&&x.type!=="waiting");
+  if(duplicate)return alert(`⚠️「${g.name}」という名前はすでに使われています。`);
+  const now=Date.now();
+  groupsRef.child(id).set({
+    type:"group",name:g.name,stage:0,limitSec:300,remainingMs:300000,
+    startAt:null,createdAt:g.createdAt||now,lane:lane,laneAssignedAt:now
+  });
+}
+
+async function advanceLane(lane, finishedId, finishedGroup){
+  const groups=getLaneGroups(latestData,lane);
+  if(!groups.length || groups[0].id!==finishedId){
+    alert("レーンの状態が変わりました。画面を確認してください。");
+    return;
+  }
+  if(!finishedGroup.finishedAt){
+    alert("まだタイマーが終了していません。");
+    return;
+  }
+  const next=groups[1];
+  const message=next
+    ? `レーン${lane}の「${finishedGroup.name||"名称未設定"}」を終了して、次の「${next.g.name||"名称未設定"}」を表示しますか？`
+    : `レーン${lane}の「${finishedGroup.name||"名称未設定"}」を終了しますか？次の組はまだありません。`;
+  if(!confirm(message))return;
+
+  const updates={};
+  updates["groups/"+finishedId+"/lane"]="";
+  updates["groups/"+finishedId+"/finishedLane"]=lane;
+  if(next){
+    updates["groups/"+next.id+"/lane"]=lane;
+    updates["groups/"+next.id+"/laneAssignedAt"]=Date.now();
+    updates["groups/"+next.id+"/finishedAt"]=null;
+    updates["groups/"+next.id+"/finishedStage"]=null;
+    updates["groups/"+next.id+"/startAt"]=null;
+  }
+  await db.ref().update(updates);
+}
+
+function finishExpiredTimers(){
+  const now=Date.now();
+  Object.entries(latestData).forEach(([id,g])=>{
+    if(isGroup(g)&&g.startAt&&getRemainingMs(g,now)<=0&&!g.finishedAt){
+      groupsRef.child(id).update({
+        remainingMs:0,startAt:null,finishedAt:now,finishedStage:Number(g.stage||0)
+      });
+    }
+  });
+}
+
+setInterval(()=>{
+  finishExpiredTimers();
+  document.querySelectorAll("[data-timer]").forEach(el=>{
+    const id=el.dataset.timer, g=latestData[id];
+    if(g) el.textContent=formatTime(getRemainingMs(g));
+  });
+  if(isDisplayMode) renderDisplay(latestData);
+  else renderSummary(latestData);
+},250);
+
+async function act(id,g,action,card){
+  const ref=groupsRef.child(id);
+  if(action==="plus") await ref.update({stage:Math.max(0,Number(g.stage||0)+1)});
+  if(action==="minus") await ref.update({stage:Math.max(0,Number(g.stage||0)-1)});
+  if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")) await ref.update({stage:0});
+  if(action==="start"){
+    const rem=getRemainingMs(g);
+    await ref.update({remainingMs:rem,startAt:Date.now(),limitSec:Math.max(1,Math.round(getLimitMs(g)/1000)),finishedAt:null,finishedStage:null});
+  }
+  if(action==="stop"&&g.startAt){
+    const rem=getRemainingMs(g);
+    await ref.update({remainingMs:rem,startAt:null});
+  }
+  if(action==="timerReset"&&confirm("このグループの残り時間を制限時間に戻しますか？")){
+    await ref.update({remainingMs:getLimitMs(g),startAt:null,finishedAt:null,finishedStage:null});
+  }
+  if(action==="setLimit"){
+    const input=card.querySelector("[data-limit]");
+    const min=Number(input.value);
+    if(!Number.isFinite(min)||min<=0) return alert("1分以上の制限時間を入力してください。");
+    const sec=Math.round(min*60);
+    // 制限時間変更時は残り時間も新しい制限時間に合わせてリセット
+    await ref.update({limitSec:sec,remainingMs:sec*1000,startAt:null});
+  }
+  if(action==="setLane"){
+    const select=card.querySelector("[data-lane-select]");
+    const lane=select?select.value:"";
+    if(lane){
+      const occupied=getLaneGroups(latestData,lane).filter(x=>x.name!==g.name);
+      if(occupied.length>=2){
+        return alert(`レーン${lane}は「体験中1組＋体験待ち1組」で満員です。`);
+      }
+    }
+    await ref.update({lane:lane,laneAssignedAt:lane?Date.now():null});
+  }
+  if(action==="delete"&&confirm("このグループを削除しますか？")) await ref.remove();
+}
+document.getElementById("addBtn").onclick=addGroup;
+document.getElementById("name").addEventListener("keydown",e=>{if(e.key==="Enter")addGroup()});
+document.getElementById("waitingAddBtn").onclick=addWaiting;
+document.getElementById("waitingName").addEventListener("keydown",e=>{if(e.key==="Enter")addWaiting()});
+
+async function addGroup(){
+  const input=document.getElementById("name"), name=input.value.trim();
+  if(!name)return alert("グループ名を入力してください。");
+  const duplicate=Object.values(latestData).some(g=>g&&String(g.name||"").trim()===name);
+  if(duplicate)return alert(`⚠️「${name}」は被ってます！\\n同じ名前のグループ（または待ち組）がすでにあります。`);
+  const now=Date.now(), sec=300;
+  await groupsRef.push({type:"group",name,stage:0,limitSec:sec,remainingMs:sec*1000,startAt:null,createdAt:now,lane:""});
+  input.value="";
+}
+async function addWaiting(){
+  const input=document.getElementById("waitingName"), name=input.value.trim();
+  if(!name)return alert("待ち組の名前を入力してください。");
+  const duplicate=Object.values(latestData).some(g=>g&&String(g.name||"").trim()===name);
+  if(duplicate)return alert(`⚠️「${name}」は被ってます！\\n同じ名前のグループ（または待ち組）がすでにあります。`);
+  await groupsRef.push({type:"waiting",name,createdAt:Date.now()});
+  input.value="";
+}
+
+async function resetAllData(){
+  const ok=confirm("⚠️ 本当に全部消しますか？\n\nテストで作ったグループ・待ち組・ステージ数・タイマー・終了履歴・ランキングがすべて削除されます。\n\n営業中は絶対に押さないでください。\n\n続ける場合は「OK」を押してください。");
+  if(!ok)return;
+  const ok2=confirm("最終確認です。\n全端末からデータが消えます。\n本当に全部消去しますか？");
+  if(!ok2)return;
+  try{
+    await groupsRef.remove();
+    alert("✅ 全データを消去しました。1からスタートできます！");
+  }catch(e){
+    alert("🔴 消去に失敗しました。\n"+(e.message||e));
+  }
+}
+document.getElementById("resetAllBtn").onclick=resetAllData;
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+</script>
+</body>
+</html>
