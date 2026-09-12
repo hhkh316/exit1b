@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>レーン個別管理</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:#f4f6f8;color:#17202a}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #ddd;padding:14px 16px}
+h1{font-size:22px;margin:0 0 4px}
+.lane-switch{font-size:13px}
+.lane-switch a{color:#1769e0;text-decoration:none;font-weight:700}
+.status{font-size:13px;margin:6px 0 0;color:#5f6368}
+button{font:inherit;border:0;border-radius:10px;padding:11px 14px;font-weight:700;background:#e9edf2;cursor:pointer}
+.primary{background:#1769e0;color:#fff}
+.danger{background:#d93025;color:#fff}
+input{font:inherit;border:1px solid #c8cdd3;border-radius:10px;padding:12px;background:#fff}
+main{padding:14px;max-width:640px;margin:auto}
+
+/* ===== 停止中バナー（消えるまで表示） ===== */
+.paused-banner{
+  display:none;
+  background:#d93025;
+  color:#fff;
+  border-radius:16px;
+  padding:18px;
+  margin-bottom:14px;
+  text-align:center;
+  font-size:22px;
+  font-weight:900;
+  box-shadow:0 4px 14px rgba(217,48,37,.35);
+  animation:pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.02)}
+}
+
+/* ===== 再開トースト（数秒で自動的に消える） ===== */
+.resumed-toast{
+  display:none;
+  background:#1e8e3e;
+  color:#fff;
+  border-radius:16px;
+  padding:16px;
+  margin-bottom:14px;
+  text-align:center;
+  font-size:20px;
+  font-weight:900;
+  box-shadow:0 4px 14px rgba(30,142,62,.35);
+}
+
+.lane-count-box{
+  background:#17202a;color:#fff;border-radius:16px;padding:12px 14px;margin-bottom:14px;
+  text-align:center;font-size:14px;font-weight:700;
+}
+.lane-count-box b{font-size:20px}
+
+.card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 7px #0000000d}
+.top{display:flex;align-items:center;gap:8px}
+.group-name{font-size:22px;font-weight:800;flex:1;overflow-wrap:anywhere}
+.badge{font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:#e9edf2}
+.badge.running{background:#e3f0ff;color:#0b5fd1}
+.badge.waitingnext{background:#fff3cd;color:#a06a00}
+.stage-label{text-align:center;color:#666;font-size:13px;margin-top:10px}
+.stage{font-size:52px;font-weight:900;text-align:center;margin:6px 0}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.controls button{min-height:56px}
+.timer{font-variant-numeric:tabular-nums;text-align:center;font-size:40px;font-weight:900;margin:12px 0 6px}
+.timer-controls{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px}
+.timer-controls button{min-height:52px;flex:1}
+.limit-row{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center}
+.limit-row input{width:90px;padding:8px;text-align:center}
+.small{font-size:12px;color:#666}
+.empty{text-align:center;padding:40px 15px;color:#777}
+.waiting-card{background:#fff;border:2px dashed #f0b400;border-radius:16px;padding:14px;margin-bottom:14px}
+.waiting-card .name{font-weight:800;font-size:16px}
+.next-btn{width:100%;min-height:54px;margin-top:10px;font-size:17px}
+.add-box{display:flex;gap:8px;margin-top:6px}
+.add-box input{flex:1;min-width:0}
+</style>
+</head>
+<body>
+<header>
+<h1 id="pageTitle">🎪 レーン管理</h1>
+<div class="lane-switch" id="laneSwitch"></div>
+<div class="status" id="status">🟡 Firebase確認中…</div>
+</header>
+<main>
+<div id="pausedBanner" class="paused-banner">⏸ タイマーが停止中です</div>
+<div id="resumedToast" class="resumed-toast">▶ タイマーが再開されました</div>
+
+<div class="lane-count-box">このレーン：<b id="laneCount">0</b>組（最大2組）</div>
+
+<div id="activeArea"></div>
+<div id="waitingArea"></div>
+
+<div class="card">
+  <div class="small" style="margin-bottom:8px">このレーンに直接グループを追加</div>
+  <div class="add-box">
+    <input id="newName" placeholder="グループ名" autocomplete="off">
+    <button class="primary" id="addBtn">追加</button>
+  </div>
+  <div class="small" id="addMessage" style="margin-top:6px;color:#d93025"></div>
+</div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" onerror="window.__firebaseSdkError=true"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js" onerror="window.__firebaseSdkError=true"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDxGXjcovsjKm5S2a-KicwYfCxplDzngk",
+  authDomain: "exit1b.firebaseapp.com",
+  databaseURL: "https://exit1b-default-rtdb.firebaseio.com",
+  projectId: "exit1b",
+  storageBucket: "exit1b.firebasestorage.app",
+  messagingSenderId: "165232048524",
+  appId: "1:165232048524:web:9e9817e8a2cb95e05ffea9"
+};
+
+// ===== レーン判定（?lane=A または ?lane=B。指定が無ければAレーン扱い） =====
+const LANES=["A","B"];
+const laneParam=(new URLSearchParams(location.search).get("lane")||"A").toUpperCase();
+const LANE=LANES.includes(laneParam)?laneParam:"A";
+const OTHER_LANE=LANE==="A"?"B":"A";
+
+document.getElementById("pageTitle").textContent="🎪 レーン"+LANE+" 管理";
+document.title="レーン"+LANE+" 管理";
+document.getElementById("laneSwitch").innerHTML=
+  `<a href="?lane=${OTHER_LANE}">→ レーン${OTHER_LANE}の管理画面はこちら</a>`;
+
+const status=document.getElementById("status");
+let latestData={};
+let db=null, groupsRef=null, connectedRef=null;
+let firebaseConnected=false, firebaseInitOK=false, firebaseErrorShown=false, firebaseReadOK=false;
+
+function setStatus(text,kind){ status.textContent=text; status.dataset.kind=kind||""; }
+function explainFirebaseError(err){
+  console.error("Firebase error:",err);
+  const code=err&&err.code?String(err.code):"";
+  const msg=err&&err.message?String(err.message):"";
+  if(code.includes("PERMISSION_DENIED")||msg.toLowerCase().includes("permission_denied"))
+    return "🔴 Firebaseの権限が拒否されています。Realtime Databaseのルールを確認してください。";
+  if(msg.toLowerCase().includes("network")||msg.toLowerCase().includes("offline"))
+    return "🔴 Firebaseに接続できません。Wi‑FiとFirebaseの通信を確認してください。";
+  return "🔴 Firebase接続エラー: "+(msg||code||"原因不明");
+}
+function setConnectionError(message){ firebaseErrorShown=true; setStatus(message,"error"); }
+
+function initFirebase(){
+  if(!window.firebase||typeof firebase.initializeApp!=="function"||typeof firebase.database!=="function"){
+    setConnectionError("🔴 Firebase SDKを読み込めませんでした。ページを再読み込みしてください。");
+    return;
+  }
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    firebaseInitOK=true;
+    db=firebase.database();
+    groupsRef=db.ref("groups");
+    connectedRef=db.ref(".info/connected");
+    setStatus("🟡 Firebaseに接続しています…","checking");
+
+    connectedRef.on("value",snap=>{
+      firebaseConnected=snap.val()===true;
+      if(firebaseConnected) setStatus("🟢 接続OK・全端末で共有中","ok");
+      else if(!firebaseReadOK) setStatus("🟠 Firebase接続待ち…","waiting");
+    },err=>setConnectionError(explainFirebaseError(err)));
+
+    groupsRef.on("value",snap=>{
+      firebaseReadOK=true;
+      latestData=snap.val()||{};
+      render(latestData);
+      if(firebaseConnected) setStatus("🟢 接続OK・全端末で共有中","ok");
+    },err=>setConnectionError(explainFirebaseError(err)));
+  }catch(err){
+    setConnectionError(explainFirebaseError(err));
+  }
+}
+
+setTimeout(()=>{
+  if(firebaseErrorShown||firebaseReadOK)return;
+  if(!firebaseInitOK) setConnectionError("🔴 Firebaseを開始できませんでした。ページを再読み込みしてください。");
+  else if(!firebaseConnected) setStatus("🟠 Firebaseに接続できません。Wi‑FiまたはDatabaseルールを確認してください。","waiting");
+},8000);
+
+function isWaiting(g){ return g&&g.type==="waiting"; }
+function isGroup(g){ return g&&!isWaiting(g); }
+function getLimitMs(g){
+  let ms=Number(g.limitSec);
+  if(!Number.isFinite(ms)||ms<=0) ms=Number(g.timeLimitSec);
+  if(!Number.isFinite(ms)||ms<=0) ms=300;
+  return ms*1000;
+}
+function getRemainingMs(g,now=Date.now()){
+  if(g.remainingMs!==undefined){
+    let ms=Number(g.remainingMs);
+    if(!Number.isFinite(ms)) ms=getLimitMs(g);
+    if(g.startAt) ms-=now-Number(g.startAt);
+    return Math.max(0,ms);
+  }
+  const elapsed=Number(g.elapsed||0);
+  const limit=getLimitMs(g);
+  const running=g.startAt?elapsed+(now-Number(g.startAt)):elapsed;
+  return Math.max(0,limit-running);
+}
+function formatTime(ms){
+  const s=Math.max(0,Math.ceil(ms/1000));
+  const m=Math.floor(s/60), sec=s%60;
+  return String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0");
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+function getLaneGroups(data,lane){
+  return Object.entries(data).filter(([,g])=>isGroup(g)&&g.lane===lane)
+    .sort((a,b)=>(a[1].laneAssignedAt||a[1].createdAt||0)-(b[1].laneAssignedAt||b[1].createdAt||0))
+    .map(([id,g])=>({id,g}));
+}
+
+// ===== 「再開されました」トーストを出すための既読管理 =====
+let lastActiveId=null;
+const seenResumedAt={}; // groupId -> 直近に確認済みの resumedAt
+const wasPausedBefore={}; // groupId -> 直前の描画時点で「停止中」だったか
+let resumedToastTimer=null;
+const RESUMED_TOAST_MS=4000; // 短めの表示時間（ミリ秒）。変更したい場合はここを調整してください。
+
+function showResumedToast(){
+  const toast=document.getElementById("resumedToast");
+  toast.style.display="block";
+  if(resumedToastTimer) clearTimeout(resumedToastTimer);
+  resumedToastTimer=setTimeout(()=>{ toast.style.display="none"; },RESUMED_TOAST_MS);
+}
+function hideResumedToastImmediately(){
+  const toast=document.getElementById("resumedToast");
+  toast.style.display="none";
+  if(resumedToastTimer){ clearTimeout(resumedToastTimer); resumedToastTimer=null; }
+}
+
+function render(data){
+  const groups=getLaneGroups(data,LANE);
+  document.getElementById("laneCount").textContent=groups.length;
+
+  const current=groups[0];
+  const waiting=groups[1];
+
+  const pausedBanner=document.getElementById("pausedBanner");
+
+  if(!current){
+    lastActiveId=null;
+    pausedBanner.style.display="none";
+    hideResumedToastImmediately();
+    document.getElementById("activeArea").innerHTML='<div class="empty">現在このレーンに組はいません。</div>';
+    document.getElementById("waitingArea").innerHTML="";
+    return;
+  }
+
+  // アクティブな組が切り替わったら、既読状態をリセット（前の組のトーストが誤って出ないように）
+  if(lastActiveId!==current.id){
+    lastActiveId=current.id;
+    seenResumedAt[current.id]=current.g.resumedAt||null; // 初回は「既読」として記録するだけ（トーストは出さない）
+    wasPausedBefore[current.id]=!!current.g.pausedAt;
+    hideResumedToastImmediately();
+  }else{
+    const prevSeen=seenResumedAt[current.id]||null;
+    const nowVal=current.g.resumedAt||null;
+    // 「停止中だった組が再開された」時だけトーストを出す（初回のタイマー開始では出さない）
+    if(nowVal && nowVal!==prevSeen && wasPausedBefore[current.id]){
+      showResumedToast();
+    }
+    seenResumedAt[current.id]=nowVal;
+    wasPausedBefore[current.id]=!!current.g.pausedAt;
+  }
+
+  // 停止中バナー：pausedAtがある＝明示的に「停止」が押されて再開待ちの状態
+  pausedBanner.style.display = current.g.pausedAt ? "block" : "none";
+
+  renderActive(current);
+  renderWaiting(waiting, current);
+}
+
+function renderActive(entry){
+  const {id,g}=entry;
+  const rem=getRemainingMs(g);
+  const limitSec=Math.max(1,Math.round(getLimitMs(g)/1000));
+  const statusLabel = g.finishedAt ? "⏰ 終了・次へ待ち" : (g.startAt ? "▶ 体験中" : (g.pausedAt ? "⏸ 停止中" : "🆕 未開始"));
+  const area=document.getElementById("activeArea");
+  area.innerHTML=`<div class="card">
+    <div class="top"><div class="group-name">${esc(g.name||"名称未設定")}</div><span class="badge running">${statusLabel}</span></div>
+    <div class="stage-label">現在のステージ</div>
+    <div class="stage">${Number(g.stage||0)}</div>
+    <div class="controls">
+      <button data-action="minus">− 1</button>
+      <button class="primary" data-action="plus">＋ 1</button>
+      <button class="reset" data-action="reset">0に戻す</button>
+    </div>
+    <div class="timer">${formatTime(rem)}</div>
+    <div class="timer-controls">
+      <button class="primary" data-action="start">${g.startAt?"一時停止から再開":"タイマー開始"}</button>
+      <button data-action="stop">停止</button>
+      <button data-action="timerReset">時間をリセット</button>
+    </div>
+    <div class="limit-row">
+      <span class="small">制限時間（分）</span>
+      <input type="number" min="1" step="1" value="${Math.max(1,Math.round(limitSec/60))}" data-limit>
+      <button data-action="setLimit">変更</button>
+    </div>
+    <div class="small" style="text-align:center;margin-top:10px">※操作内容はすべての画面に反映されます</div>
+  </div>`;
+  area.querySelectorAll("button[data-action]").forEach(btn=>{
+    btn.addEventListener("click",()=>act(id,g,btn.dataset.action,area));
+  });
+}
+
+function renderWaiting(waitingEntry,currentEntry){
+  const box=document.getElementById("waitingArea");
+  if(!waitingEntry){ box.innerHTML=""; return; }
+  const g=waitingEntry.g;
+  let nextBtn="";
+  if(currentEntry.g.finishedAt){
+    nextBtn=`<button class="primary next-btn" id="nextBtn">➡️ 次へ（${esc(g.name||"名称未設定")}を開始できる状態にする）</button>`;
+  }
+  box.innerHTML=`<div class="waiting-card">
+    <span class="badge waitingnext">⏳ 体験待ち</span>
+    <div class="name">${esc(g.name||"名称未設定")}</div>
+    ${nextBtn}
+  </div>`;
+  const btn=document.getElementById("nextBtn");
+  if(btn) btn.onclick=()=>advanceLane(currentEntry.id,currentEntry.g);
+}
+
+async function act(id,g,action,card){
+  const ref=groupsRef.child(id);
+  if(action==="plus") await ref.update({stage:Math.max(0,Number(g.stage||0)+1)});
+  if(action==="minus") await ref.update({stage:Math.max(0,Number(g.stage||0)-1)});
+  if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")) await ref.update({stage:0});
+  if(action==="start"){
+    const rem=getRemainingMs(g);
+    await ref.update({remainingMs:rem,startAt:Date.now(),limitSec:Math.max(1,Math.round(getLimitMs(g)/1000)),finishedAt:null,finishedStage:null,pausedAt:null,resumedAt:Date.now()});
+  }
+  if(action==="stop"&&g.startAt){
+    const rem=getRemainingMs(g);
+    await ref.update({remainingMs:rem,startAt:null,pausedAt:Date.now()});
+  }
+  if(action==="timerReset"&&confirm("このグループの残り時間を制限時間に戻しますか？")){
+    await ref.update({remainingMs:getLimitMs(g),startAt:null,finishedAt:null,finishedStage:null,pausedAt:null,resumedAt:null});
+  }
+  if(action==="setLimit"){
+    const input=card.querySelector("[data-limit]");
+    const min=Number(input.value);
+    if(!Number.isFinite(min)||min<=0) return alert("1分以上の制限時間を入力してください。");
+    const sec=Math.round(min*60);
+    await ref.update({limitSec:sec,remainingMs:sec*1000,startAt:null,pausedAt:null,resumedAt:null});
+  }
+}
+
+async function advanceLane(finishedId,finishedGroup){
+  const groups=getLaneGroups(latestData,LANE);
+  if(!groups.length||groups[0].id!==finishedId){
+    alert("レーンの状態が変わりました。画面を確認してください。");
+    return;
+  }
+  if(!finishedGroup.finishedAt){
+    alert("まだタイマーが終了していません。");
+    return;
+  }
+  const next=groups[1];
+  const message=next
+    ? `「${finishedGroup.name||"名称未設定"}」を終了して、次の「${next.g.name||"名称未設定"}」を開始できる状態にしますか？`
+    : `「${finishedGroup.name||"名称未設定"}」を終了しますか？次の組はまだありません。`;
+  if(!confirm(message))return;
+
+  const updates={};
+  updates["groups/"+finishedId+"/lane"]="";
+  updates["groups/"+finishedId+"/finishedLane"]=LANE;
+  if(next){
+    updates["groups/"+next.id+"/lane"]=LANE;
+    updates["groups/"+next.id+"/laneAssignedAt"]=Date.now();
+    updates["groups/"+next.id+"/finishedAt"]=null;
+    updates["groups/"+next.id+"/finishedStage"]=null;
+    updates["groups/"+next.id+"/startAt"]=null;
+    updates["groups/"+next.id+"/pausedAt"]=null;
+    updates["groups/"+next.id+"/resumedAt"]=null;
+  }
+  await db.ref().update(updates);
+}
+
+document.getElementById("addBtn").onclick=addToLane;
+document.getElementById("newName").addEventListener("keydown",e=>{if(e.key==="Enter")addToLane();});
+
+async function addToLane(){
+  const input=document.getElementById("newName");
+  const msg=document.getElementById("addMessage");
+  msg.textContent="";
+  const name=input.value.trim();
+  if(!name){ msg.textContent="グループ名を入力してください。"; return; }
+  const duplicate=Object.values(latestData).some(g=>g&&String(g.name||"").trim()===name);
+  if(duplicate){ msg.textContent=`「${name}」という名前はすでに使われています。`; return; }
+  const occupied=getLaneGroups(latestData,LANE);
+  if(occupied.length>=2){ msg.textContent=`レーン${LANE}は満員です（体験中1組＋体験待ち1組）。`; return; }
+  const now=Date.now();
+  await groupsRef.push({
+    type:"group",name,stage:0,limitSec:300,remainingMs:300000,
+    startAt:null,createdAt:now,lane:LANE,laneAssignedAt:now,pausedAt:null,resumedAt:null
+  });
+  input.value="";
+}
+
+setInterval(()=>{
+  const now=Date.now();
+  Object.entries(latestData).forEach(([id,g])=>{
+    if(isGroup(g)&&g.lane===LANE&&g.startAt&&getRemainingMs(g,now)<=0&&!g.finishedAt){
+      groupsRef.child(id).update({remainingMs:0,startAt:null,finishedAt:now,finishedStage:Number(g.stage||0)});
+    }
+  });
+  const timerEl=document.querySelector(".timer");
+  const groups=getLaneGroups(latestData,LANE);
+  if(timerEl&&groups[0]){
+    timerEl.textContent=formatTime(getRemainingMs(groups[0].g));
+  }
+},250);
+
+// すべての関数・変数の宣言が終わってからFirebaseへの接続を開始する
+initFirebase();
+</script>
+</body>
+</html>
