@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>1-B 文化祭 グループ管理・安定版</title>
+<title>1-B 文化祭 グループ管理・安定版（2レーン）</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:#f4f6f8;color:#17202a}
@@ -20,7 +20,7 @@ main{padding:14px;max-width:900px;margin:auto}
 .summary{background:#17202a;color:#fff;border-radius:16px;padding:14px;margin-bottom:12px;text-align:center}
 .summary-label{font-size:13px;opacity:.8}
 .summary-time{font-size:34px;font-weight:900;font-variant-numeric:tabular-nums;margin-top:2px}
-.lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.lanes{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
 .lane{background:#fff;border:1px solid #ddd;border-radius:14px;padding:10px}
 .lane-title{font-size:16px;font-weight:900;text-align:center}
 .lane-count{text-align:center;font-size:12px;color:#666;margin:3px 0 8px}
@@ -54,7 +54,7 @@ main{padding:14px;max-width:900px;margin:auto}
 .notice{background:#fff3cd;border:2px solid #f0b400;border-radius:14px;padding:12px;margin-bottom:12px;box-shadow:0 2px 8px #00000012}
 @media(min-width:900px) and (orientation:landscape){
   main{max-width:none;padding:10px 12px}
-  .lanes{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:start}
+  .lanes{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
   .lane{min-width:0;padding:9px}
   .lane-groups{max-height:calc(100vh - 250px);overflow-y:auto;padding-right:2px}
   .lane .card{margin-bottom:8px;padding:11px}
@@ -78,10 +78,10 @@ main{padding:14px;max-width:900px;margin:auto}
   .waiting-add{flex-direction:column}
 }
 
-/* 3レーン表示用：iPad横向きでA/B/Cを常時横並び */
+/* 2レーン表示用：iPad横向きでA/Bを常時横並び */
 @media (orientation:landscape){
   main{max-width:none}
-  .lanes{grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
+  .lanes{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
   .lane{min-width:0}
   .lane-groups{overflow:visible;max-height:none}
 }
@@ -210,7 +210,7 @@ body.display-mode .display-board{
 </header>
 <main>
 <div id="displayBoard" class="display-board" style="display:none"></div>
-<div class="status" id="status">🟡 Firebase確認中…</div><div id="buildInfo" class="small" style="margin:-8px 0 10px">安定版 / v2026-09-03-1</div>
+<div class="status" id="status">🟡 Firebase確認中…</div><div id="buildInfo" class="small" style="margin:-8px 0 10px">安定版（2レーン） / v2026-09-03-1</div>
 <div id="finishNotice"></div>
 <div class="summary">
 <div class="summary-label">最短で終了するグループまで</div>
@@ -227,7 +227,6 @@ body.display-mode .display-board{
 <div class="lanes">
 <div class="lane"><div class="lane-title">レーンA</div><div class="lane-count" data-lane-count="A">0組（最大2組）</div><div class="lane-groups" data-lane-groups="A"><div class="lane-empty">未割り当て</div></div></div>
 <div class="lane"><div class="lane-title">レーンB</div><div class="lane-count" data-lane-count="B">0組（最大2組）</div><div class="lane-groups" data-lane-groups="B"><div class="lane-empty">未割り当て</div></div></div>
-<div class="lane"><div class="lane-title">レーンC</div><div class="lane-count" data-lane-count="C">0組（最大2組）</div><div class="lane-groups" data-lane-groups="C"><div class="lane-empty">未割り当て</div></div></div>
 </div>
 <div class="finished-area" id="finishedArea"><div class="finished-title">✅ タイマー終了チーム（縮小表示）</div><div id="finishedList" class="finished-list"><span class="small">まだ終了したチームはいません。</span></div></div>
 <div class="ranking" id="ranking">
@@ -258,7 +257,7 @@ const firebaseConfig = {
   appId: "1:165232048524:web:9e9817e8a2cb95e05ffea9"
 };
 const displayParam=new URLSearchParams(location.search).get("display");
-const isDisplayMode=["A","B","C"].includes((displayParam||"").toUpperCase());
+const isDisplayMode=["A","B"].includes((displayParam||"").toUpperCase());
 if(isDisplayMode){
   document.body.classList.add("display-mode");
   document.getElementById("displayBoard").style.display="grid";
@@ -319,7 +318,6 @@ function setConnectionError(message){
 }
 
 (function initFirebase(){
-  // Firebase SDKが読み込めていない場合を明確に表示
   if(!window.firebase || typeof firebase.initializeApp!=="function" || typeof firebase.database!=="function"){
     setConnectionError("🔴 Firebase SDKを読み込めませんでした。ページを再読み込みしてください。");
     return;
@@ -348,7 +346,6 @@ function setConnectionError(message){
       if(firebaseConnected) setStatus("🟢 接続OK・全端末で共有中","ok");
     },err=>setConnectionError(explainFirebaseError(err)));
 
-    // 読み取り権限もここで確認。成功すれば「接続OK」にする。
     groupsRef.once("value").then(snap=>{
       firebaseReadOK=true;
       latestData=snap.val()||{};
@@ -361,7 +358,6 @@ function setConnectionError(message){
   }
 })();
 
-// 「確認中」が永久に残らないよう、8秒で具体的な状態にする
 setTimeout(()=>{
   if(firebaseErrorShown || firebaseReadOK)return;
   if(!firebaseInitOK){
@@ -381,14 +377,12 @@ function getLimitMs(g){
   return ms*1000;
 }
 function getRemainingMs(g,now=Date.now()){
-  // 新形式
   if(g.remainingMs!==undefined){
     let ms=Number(g.remainingMs);
     if(!Number.isFinite(ms)) ms=getLimitMs(g);
     if(g.startAt) ms-=now-Number(g.startAt);
     return Math.max(0,ms);
   }
-  // 旧形式データは経過時間として扱い、デフォルト5分に変換
   const elapsed=Number(g.elapsed||0);
   const limit=getLimitMs(g);
   const running=g.startAt ? elapsed+(now-Number(g.startAt)) : elapsed;
@@ -424,7 +418,6 @@ function render(data){
   if(!unassigned.length){list.innerHTML='<div class="empty">未割り当てのグループはありません。</div>';return;}
   unassigned.forEach(([id,g])=>list.appendChild(buildGroupCard(id,g)));
 }
-// 表示画面では「次へ」が押されるまで、終了した組を固定表示する。
 const displayFinishedState={};
 
 function renderDisplay(data){
@@ -447,8 +440,6 @@ function renderDisplay(data){
       return;
     }
 
-    // 管理画面の「次へ」で現在の組がレーンから外れたときだけ、
-    // このIDが次の組のIDに変わる。タイマー終了だけではIDを変えない。
     if(displayFinishedState[lane] && displayFinishedState[lane]!==currentEntry.id){
       displayFinishedState[lane]=null;
       wrap.classList.remove("is-finished");
@@ -466,7 +457,6 @@ function renderDisplay(data){
       wrap.classList.remove("is-finished");
       timer.textContent=formatTime(getRemainingMs(current));
     }else{
-      // 終了後は管理画面の「次へ」まで終了表示を維持する。
       wrap.classList.add("is-finished");
       timer.textContent="00:00";
     }
@@ -483,7 +473,7 @@ function buildGroupCard(id,g){
   <div class="timer" data-timer="${id}">${formatTime(rem)}</div>
   <div class="timer-controls"><button class="primary" data-action="start">${g.startAt?"一時停止から再開":"タイマー開始"}</button><button data-action="stop">停止</button><button data-action="timerReset">時間をリセット</button></div>
   <div class="limit-row"><span class="small">制限時間（分）</span><input type="number" min="1" step="1" value="${Math.max(1,Math.round(limitSec/60))}" data-limit><button data-action="setLimit">制限時間を変更</button></div>
-  <div class="limit-row"><span class="small">レーン</span><select class="lane-select" data-lane-select><option value="" ${!g.lane?"selected":""}>未割り当て</option><option value="A" ${g.lane==="A"?"selected":""}>A</option><option value="B" ${g.lane==="B"?"selected":""}>B</option><option value="C" ${g.lane==="C"?"selected":""}>C</option></select><button data-action="setLane">レーンを設定</button></div>
+  <div class="limit-row"><span class="small">レーン</span><select class="lane-select" data-lane-select><option value="" ${!g.lane?"selected":""}>未割り当て</option><option value="A" ${g.lane==="A"?"selected":""}>A</option><option value="B" ${g.lane==="B"?"selected":""}>B</option></select><button data-action="setLane">レーンを設定</button></div>
   <div class="small" style="text-align:center;margin-top:6px">※操作内容はすべてのiPadに反映されます</div>`;
   card.querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>act(id,g,btn.dataset.action,card)));
   return card;
@@ -494,7 +484,7 @@ function getLaneGroups(data,lane){
     .map(([id,g])=>({id,g}));
 }
 function renderLanes(data){
-  ["A","B","C"].forEach(lane=>{
+  ["A","B"].forEach(lane=>{
     const groups=getLaneGroups(data,lane);
     document.querySelector(`[data-lane-count="${lane}"]`).textContent=groups.length+"組（最大2組）";
     const box=document.querySelector(`[data-lane-groups="${lane}"]`);
@@ -536,7 +526,7 @@ function renderWaiting(data){
     row.innerHTML=`<div class="wait-item-name">${i+1}. ${esc(g.name||"名称未設定")}</div>
       <select class="wait-lane">
         <option value="">レーン選択</option>
-        <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+        <option value="A">A</option><option value="B">B</option>
       </select>
       <button class="primary">案内済み</button>`;
     const select=row.querySelector(".wait-lane");
@@ -666,7 +656,6 @@ async function act(id,g,action,card){
     const min=Number(input.value);
     if(!Number.isFinite(min)||min<=0) return alert("1分以上の制限時間を入力してください。");
     const sec=Math.round(min*60);
-    // 制限時間変更時は残り時間も新しい制限時間に合わせてリセット
     await ref.update({limitSec:sec,remainingMs:sec*1000,startAt:null});
   }
   if(action==="setLane"){
