@@ -610,6 +610,8 @@ async function advanceLane(lane, finishedId, finishedGroup){
     updates["groups/"+next.id+"/finishedAt"]=null;
     updates["groups/"+next.id+"/finishedStage"]=null;
     updates["groups/"+next.id+"/startAt"]=null;
+    updates["groups/"+next.id+"/pausedAt"]=null;
+    updates["groups/"+next.id+"/resumedAt"]=null;
   }
   await db.ref().update(updates);
 }
@@ -642,14 +644,14 @@ async function act(id,g,action,card){
   if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")) await ref.update({stage:0});
   if(action==="start"){
     const rem=getRemainingMs(g);
-    await ref.update({remainingMs:rem,startAt:Date.now(),limitSec:Math.max(1,Math.round(getLimitMs(g)/1000)),finishedAt:null,finishedStage:null});
+    await ref.update({remainingMs:rem,startAt:Date.now(),limitSec:Math.max(1,Math.round(getLimitMs(g)/1000)),finishedAt:null,finishedStage:null,pausedAt:null,resumedAt:Date.now()});
   }
   if(action==="stop"&&g.startAt){
     const rem=getRemainingMs(g);
-    await ref.update({remainingMs:rem,startAt:null});
+    await ref.update({remainingMs:rem,startAt:null,pausedAt:Date.now()});
   }
   if(action==="timerReset"&&confirm("このグループの残り時間を制限時間に戻しますか？")){
-    await ref.update({remainingMs:getLimitMs(g),startAt:null,finishedAt:null,finishedStage:null});
+    await ref.update({remainingMs:getLimitMs(g),startAt:null,finishedAt:null,finishedStage:null,pausedAt:null,resumedAt:null});
   }
   if(action==="setLimit"){
     const input=card.querySelector("[data-limit]");
