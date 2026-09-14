@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>状況モニター</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:#f4f6f8;color:#17202a}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #ddd;padding:14px 16px}
+h1{font-size:22px;margin:0 0 4px}
+.status{font-size:13px;margin:4px 0 0;color:#5f6368}
+main{padding:14px;max-width:900px;margin:auto}
+section.block{background:#fff;border:1px solid #ddd;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 7px #0000000d}
+h2{font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.small{font-size:12px;color:#666}
+.empty{text-align:center;padding:24px 15px;color:#888;font-size:13px}
+
+/* ===== 接続端末一覧 ===== */
+.device-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #eee}
+.device-row:first-child{border-top:none}
+.device-icon{font-size:22px;width:32px;text-align:center;flex-shrink:0}
+.device-main{flex:1;min-width:0}
+.device-page{font-weight:800;font-size:15px}
+.device-meta{font-size:12px;color:#666;overflow-wrap:anywhere}
+.device-count{font-size:13px;font-weight:700;color:#1769e0}
+
+/* ===== レーン状況 ===== */
+.lanes-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.lanes-grid{grid-template-columns:1fr}}
+.lane-box{border:1px solid #ddd;border-radius:14px;padding:14px}
+.lane-box h3{margin:0 0 8px;font-size:16px}
+.lane-current{background:#f4f6f8;border-radius:12px;padding:10px;margin-bottom:8px}
+.lane-current .name{font-weight:800;font-size:16px;overflow-wrap:anywhere}
+.lane-current .row{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:13px;color:#555}
+.lane-current .timer-num{font-size:26px;font-weight:900;font-variant-numeric:tabular-nums}
+.badge{font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;background:#e9edf2;display:inline-block}
+.badge.running{background:#e3f0ff;color:#0b5fd1}
+.badge.paused{background:#fdeaea;color:#d93025}
+.badge.finished{background:#fff3cd;color:#a06a00}
+.lane-next{font-size:13px;color:#666;padding-left:2px}
+.lane-next b{color:#17202a}
+
+/* ===== Firebase状況 ===== */
+.fb-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-top:1px solid #eee}
+.fb-row:first-child{border-top:none}
+</style>
+</head>
+<body>
+<header>
+<h1>🖥 状況モニター（閲覧専用）</h1>
+<div class="status" id="status">🟡 Firebase確認中…</div>
+</header>
+<main>
+
+<section class="block">
+  <h2>📶 接続中の端末 <span class="device-count" id="deviceCount">0台</span></h2>
+  <div id="deviceList"><div class="empty">読み込み中…</div></div>
+</section>
+
+<section class="block">
+  <h2>🏁 レーンの状況</h2>
+  <div class="lanes-grid" id="lanesGrid"></div>
+</section>
+
+<section class="block">
+  <h2>🔥 Firebase接続状況</h2>
+  <div id="fbInfo">
+    <div class="fb-row"><span>接続状態</span><span id="fbConnected">-</span></div>
+    <div class="fb-row"><span>プロジェクトID</span><span id="fbProject">-</span></div>
+    <div class="fb-row"><span>データベースURL</span><span id="fbDbUrl" style="overflow-wrap:anywhere;text-align:right;max-width:60%">-</span></div>
+    <div class="fb-row"><span>groups件数</span><span id="fbGroupsCount">-</span></div>
+    <div class="fb-row"><span>presence件数</span><span id="fbPresenceCount">-</span></div>
+  </div>
+</section>
+
+<div class="small" style="text-align:center;margin-top:-6px">このページは表示専用です。編集や操作はできません。</div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" onerror="window.__firebaseSdkError=true"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js" onerror="window.__firebaseSdkError=true"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDxGXjcovsjKm5S2a-KicwYfCxplDzngk",
+  authDomain: "exit1b.firebaseapp.com",
+  databaseURL: "https://exit1b-default-rtdb.firebaseio.com",
+  projectId: "exit1b",
+  storageBucket: "exit1b.firebasestorage.app",
+  messagingSenderId: "165232048524",
+  appId: "1:165232048524:web:9e9817e8a2cb95e05ffea9"
+};
+
+const status=document.getElementById("status");
+let db=null, firebaseConnected=false, firebaseInitOK=false, firebaseErrorShown=false;
+let latestGroups={}, latestPresence={};
+
+function setStatus(text,kind){ status.textContent=text; status.dataset.kind=kind||""; }
+function explainFirebaseError(err){
+  console.error("Firebase error:",err);
+  const code=err&&err.code?String(err.code):"";
+  const msg=err&&err.message?String(err.message):"";
+  if(code.includes("PERMISSION_DENIED")||msg.toLowerCase().includes("permission_denied"))
+    return "🔴 Firebaseの権限が拒否されています。Realtime Databaseのルールを確認してください。";
+  if(msg.toLowerCase().includes("network")||msg.toLowerCase().includes("offline"))
+    return "🔴 Firebaseに接続できません。Wi‑FiとFirebaseの通信を確認してください。";
+  return "🔴 Firebase接続エラー: "+(msg||code||"原因不明");
+}
+function setConnectionError(message){ firebaseErrorShown=true; setStatus(message,"error"); }
+
+function isWaiting(g){ return g&&g.type==="waiting"; }
+function isGroup(g){ return g&&!isWaiting(g); }
+function getLimitMs(g){
+  let ms=Number(g.limitSec);
+  if(!Number.isFinite(ms)||ms<=0) ms=Number(g.timeLimitSec);
+  if(!Number.isFinite(ms)||ms<=0) ms=300;
+  return ms*1000;
+}
+function getRemainingMs(g,now=Date.now()){
+  if(g.remainingMs!==undefined){
+    let ms=Number(g.remainingMs);
+    if(!Number.isFinite(ms)) ms=getLimitMs(g);
+    if(g.startAt) ms-=now-Number(g.startAt);
+    return Math.max(0,ms);
+  }
+  const elapsed=Number(g.elapsed||0);
+  const limit=getLimitMs(g);
+  const running=g.startAt?elapsed+(now-Number(g.startAt)):elapsed;
+  return Math.max(0,limit-running);
+}
+function formatTime(ms){
+  const s=Math.max(0,Math.ceil(ms/1000));
+  const m=Math.floor(s/60), sec=s%60;
+  return String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0");
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function getLaneGroups(data,lane){
+  return Object.entries(data).filter(([,g])=>isGroup(g)&&g.lane===lane)
+    .sort((a,b)=>(a[1].laneAssignedAt||a[1].createdAt||0)-(b[1].laneAssignedAt||b[1].createdAt||0))
+    .map(([id,g])=>({id,g}));
+}
+
+// ===== 端末アイコン・種類のざっくり判定（あくまで目安） =====
+function deviceLabel(ua){
+  ua=ua||"";
+  if(/iPad/.test(ua)) return {icon:"📱",label:"iPad"};
+  if(/iPhone/.test(ua)) return {icon:"📱",label:"iPhone"};
+  if(/Android/.test(ua)) return {icon:"📱",label:"Android端末"};
+  if(/Macintosh/.test(ua)) return {icon:"💻",label:"Mac"};
+  if(/Windows/.test(ua)) return {icon:"💻",label:"Windows PC"};
+  return {icon:"🖥",label:"不明な端末"};
+}
+function timeAgo(ts){
+  if(!ts) return "-";
+  const sec=Math.max(0,Math.floor((Date.now()-Number(ts))/1000));
+  if(sec<60) return sec+"秒前から接続中";
+  const min=Math.floor(sec/60);
+  if(min<60) return min+"分前から接続中";
+  const hr=Math.floor(min/60);
+  return hr+"時間"+(min%60)+"分前から接続中";
+}
+
+function renderDevices(){
+  const entries=Object.entries(latestPresence);
+  document.getElementById("deviceCount").textContent=entries.length+"台";
+  const box=document.getElementById("deviceList");
+  if(!entries.length){ box.innerHTML='<div class="empty">現在接続している端末はありません。</div>'; return; }
+  entries.sort((a,b)=>(a[1].connectedAt||0)-(b[1].connectedAt||0));
+  box.innerHTML=entries.map(([id,p])=>{
+    const d=deviceLabel(p.userAgent);
+    return `<div class="device-row">
+      <div class="device-icon">${d.icon}</div>
+      <div class="device-main">
+        <div class="device-page">${esc(p.page||"不明な画面")}</div>
+        <div class="device-meta">${esc(d.label)}・${timeAgo(p.connectedAt)}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderLanes(){
+  const box=document.getElementById("lanesGrid");
+  box.innerHTML=["A","B"].map(lane=>{
+    const groups=getLaneGroups(latestGroups,lane);
+    const current=groups[0], next=groups[1];
+    let currentHtml;
+    if(!current){
+      currentHtml='<div class="small" style="padding:8px 0">現在この組はいません。</div>';
+    }else{
+      const g=current.g;
+      const rem=getRemainingMs(g);
+      let badge;
+      if(g.finishedAt) badge='<span class="badge finished">⏰ 終了・次へ待ち</span>';
+      else if(g.startAt) badge='<span class="badge running">▶ 体験中</span>';
+      else if(g.pausedAt) badge='<span class="badge paused">⏸ 停止中</span>';
+      else badge='<span class="badge">🆕 未開始</span>';
+      currentHtml=`<div class="lane-current">
+        <div class="name">${esc(g.name||"名称未設定")}</div>
+        <div class="row"><span>${badge}</span><span class="timer-num">${formatTime(rem)}</span></div>
+        <div class="row"><span>ステージ</span><span>${Number(g.stage||0)}</span></div>
+      </div>`;
+    }
+    const nextHtml = next
+      ? `<div class="lane-next">⏳ 次の組：<b>${esc(next.g.name||"名称未設定")}</b></div>`
+      : `<div class="lane-next">⏳ 次の組：なし</div>`;
+    return `<div class="lane-box">
+      <h3>レーン${lane}（${groups.length}組）</h3>
+      ${currentHtml}
+      ${nextHtml}
+    </div>`;
+  }).join("");
+}
+
+function renderFirebaseInfo(){
+  document.getElementById("fbConnected").textContent = firebaseConnected ? "🟢 接続中" : "🔴 未接続";
+  document.getElementById("fbProject").textContent = firebaseConfig.projectId;
+  document.getElementById("fbDbUrl").textContent = firebaseConfig.databaseURL;
+  document.getElementById("fbGroupsCount").textContent = Object.keys(latestGroups).length+"件";
+  document.getElementById("fbPresenceCount").textContent = Object.keys(latestPresence).length+"件";
+}
+
+function initFirebase(){
+  if(!window.firebase||typeof firebase.initializeApp!=="function"||typeof firebase.database!=="function"){
+    setConnectionError("🔴 Firebase SDKを読み込めませんでした。ページを再読み込みしてください。");
+    return;
+  }
+  try{
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    firebaseInitOK=true;
+    db=firebase.database();
+    setStatus("🟡 Firebaseに接続しています…","checking");
+
+    db.ref(".info/connected").on("value",snap=>{
+      firebaseConnected=snap.val()===true;
+      setStatus(firebaseConnected?"🟢 接続OK・自動更新中":"🟠 Firebase接続待ち…", firebaseConnected?"ok":"waiting");
+      renderFirebaseInfo();
+    },err=>setConnectionError(explainFirebaseError(err)));
+
+    db.ref("groups").on("value",snap=>{
+      latestGroups=snap.val()||{};
+      renderLanes();
+      renderFirebaseInfo();
+    },err=>setConnectionError(explainFirebaseError(err)));
+
+    db.ref("presence").on("value",snap=>{
+      latestPresence=snap.val()||{};
+      renderDevices();
+      renderFirebaseInfo();
+    },err=>setConnectionError(explainFirebaseError(err)));
+
+  }catch(err){
+    setConnectionError(explainFirebaseError(err));
+  }
+}
+
+setTimeout(()=>{
+  if(firebaseErrorShown)return;
+  if(!firebaseInitOK) setConnectionError("🔴 Firebaseを開始できませんでした。ページを再読み込みしてください。");
+},8000);
+
+// 「◯分前から接続中」の表示や、タイマーの秒数表示を定期的に更新
+setInterval(()=>{
+  renderDevices();
+  renderLanes();
+},1000);
+
+initFirebase();
+</script>
+</body>
+</html>
