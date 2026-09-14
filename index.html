@@ -202,7 +202,7 @@ body.display-mode .display-board{
 </head>
 <body>
 <header>
-<h1> 1-B 文化祭 グループ管理</h1>
+<h1>🎪 1-B 文化祭 グループ管理</h1>
 <div class="add">
 <input id="name" placeholder="グループ名（例：Aグループ）" autocomplete="off">
 <button class="primary" id="addBtn">追加</button><button class="danger" id="resetAllBtn">🗑️ 全データを消去</button>
@@ -230,7 +230,7 @@ body.display-mode .display-board{
 </div>
 <div class="finished-area" id="finishedArea"><div class="finished-title">✅ タイマー終了チーム（縮小表示）</div><div id="finishedList" class="finished-list"><span class="small">まだ終了したチームはいません。</span></div></div>
 <div class="ranking" id="ranking">
-<h2>🏆 ランキング</h2>
+<h2>🏆 タイマー終了ランキング</h2>
 <div id="rankingList" class="small">まだ終了したグループはいません。</div>
 </div>
 
@@ -239,7 +239,7 @@ body.display-mode .display-board{
      target="_blank"
      rel="noopener"
      style="display:inline-block;background:#1769e0;color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:14px 22px;border-radius:12px;">
-    スタッフ画面を開く
+    👥 スタッフ画面を開く
   </a>
 </div>
 
@@ -317,6 +317,22 @@ function setConnectionError(message){
   setStatus(message,"error");
 }
 
+// ===== 状況モニター用のプレゼンス（在席）情報 =====
+const sessionId="sess_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2);
+let presenceSetup=false;
+function setupPresence(){
+  if(presenceSetup||!db)return;
+  presenceSetup=true;
+  const pageLabel = isDisplayMode ? ("ステージ表示（レーン"+(displayParam||"A").toUpperCase()+"）") : "メイン管理画面";
+  const presenceRef=db.ref("presence/"+sessionId);
+  presenceRef.onDisconnect().remove();
+  presenceRef.set({
+    page:pageLabel,
+    connectedAt:firebase.database.ServerValue.TIMESTAMP,
+    userAgent:navigator.userAgent
+  });
+}
+
 (function initFirebase(){
   if(!window.firebase || typeof firebase.initializeApp!=="function" || typeof firebase.database!=="function"){
     setConnectionError("🔴 Firebase SDKを読み込めませんでした。ページを再読み込みしてください。");
@@ -334,6 +350,7 @@ function setConnectionError(message){
       firebaseConnected=snap.val()===true;
       if(firebaseConnected){
         setStatus("🟢 接続OK・全端末で共有中","ok");
+        setupPresence();
       }else if(!firebaseReadOK){
         setStatus("🟠 Firebase接続待ち…","waiting");
       }
