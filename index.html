@@ -87,7 +87,7 @@ main{padding:14px;max-width:900px;margin:auto}
 }
 
 /* ステージ表示専用モード */
-body.display-mode{background:#ffd400;color:#000;overflow:hidden}
+body.display-mode{background:#87ceeb;color:#fff;overflow:hidden}
 body.display-mode header, body.display-mode #finishNotice, body.display-mode .summary,
 body.display-mode #finishedArea, body.display-mode #ranking, body.display-mode .waiting,
 body.display-mode #list, body.display-mode .status{display:none!important}
@@ -103,14 +103,14 @@ body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100v
   padding:20px;
   text-align:center;
 }
-.display-lane-label{font-size:clamp(30px,5vw,64px);font-weight:900;letter-spacing:.08em;color:#000}
+.display-lane-label{font-size:clamp(30px,5vw,64px);font-weight:900;letter-spacing:.08em;color:#fff}
 .display-team{
   font-size:clamp(32px,5.5vw,72px);
   font-weight:900;
   margin-top:12px;
   max-width:95%;
   overflow-wrap:anywhere;
-  color:#000;
+  color:#fff;
 }
 .display-stage{
   font-size:clamp(220px,42vw,600px);
@@ -118,15 +118,15 @@ body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100v
   line-height:.85;
   font-variant-numeric:tabular-nums;
   margin:12px 0;
-  color:#000;
+  color:#fff;
 }
-.display-stage-label{font-size:clamp(22px,3vw,38px);font-weight:800;color:#000}
+.display-stage-label{font-size:clamp(22px,3vw,38px);font-weight:800;color:#fff}
 .display-timer{
   font-size:clamp(32px,5vw,64px);
   font-weight:900;
   font-variant-numeric:tabular-nums;
   margin-top:12px;
-  color:#000;
+  color:#fff;
 }
 .display-finished-banner{
   display:none;
@@ -134,13 +134,13 @@ body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100v
   font-weight:1000;
   margin-bottom:10px;
   white-space:nowrap;
-  color:#000;
+  color:#fff;
   text-shadow:none;
 }
 .display-lane.is-finished .display-finished-banner{display:block}
 .display-lane.is-finished .display-timer{font-size:clamp(28px,4vw,52px)}
-.display-wait{font-size:clamp(20px,3vw,34px);opacity:.7;color:#000}
-.display-finished{font-size:clamp(24px,3.5vw,44px);font-weight:800;color:#000}
+.display-wait{font-size:clamp(20px,3vw,34px);opacity:.7;color:#fff}
+.display-finished{font-size:clamp(24px,3.5vw,44px);font-weight:800;color:#fff}
 @media(max-width:700px){
   .display-board{grid-template-columns:1fr}
   .display-stage{font-size:clamp(180px,48vw,420px)}
