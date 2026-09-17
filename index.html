@@ -1,3 +1,7 @@
+index.html 最新版
+
+
+
 <!doctype html>
 <html lang="ja">
 <head>
@@ -87,7 +91,7 @@ main{padding:14px;max-width:900px;margin:auto}
 }
 
 /* ステージ表示専用モード */
-body.display-mode{background:#87ceeb;color:#fff;overflow:hidden}
+body.display-mode{background:#ffd400;color:#000;overflow:hidden}
 body.display-mode header, body.display-mode #finishNotice, body.display-mode .summary,
 body.display-mode #finishedArea, body.display-mode #ranking, body.display-mode .waiting,
 body.display-mode #list, body.display-mode .status{display:none!important}
@@ -103,14 +107,14 @@ body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100v
   padding:20px;
   text-align:center;
 }
-.display-lane-label{font-size:clamp(30px,5vw,64px);font-weight:900;letter-spacing:.08em;color:#fff}
+.display-lane-label{font-size:clamp(30px,5vw,64px);font-weight:900;letter-spacing:.08em;color:#000}
 .display-team{
   font-size:clamp(32px,5.5vw,72px);
   font-weight:900;
   margin-top:12px;
   max-width:95%;
   overflow-wrap:anywhere;
-  color:#fff;
+  color:#000;
 }
 .display-stage{
   font-size:clamp(220px,42vw,600px);
@@ -118,15 +122,15 @@ body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100v
   line-height:.85;
   font-variant-numeric:tabular-nums;
   margin:12px 0;
-  color:#fff;
+  color:#000;
 }
-.display-stage-label{font-size:clamp(22px,3vw,38px);font-weight:800;color:#fff}
+.display-stage-label{font-size:clamp(22px,3vw,38px);font-weight:800;color:#000}
 .display-timer{
   font-size:clamp(32px,5vw,64px);
   font-weight:900;
   font-variant-numeric:tabular-nums;
   margin-top:12px;
-  color:#fff;
+  color:#000;
 }
 .display-finished-banner{
   display:none;
@@ -134,13 +138,13 @@ body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100v
   font-weight:1000;
   margin-bottom:10px;
   white-space:nowrap;
-  color:#fff;
+  color:#000;
   text-shadow:none;
 }
 .display-lane.is-finished .display-finished-banner{display:block}
 .display-lane.is-finished .display-timer{font-size:clamp(28px,4vw,52px)}
-.display-wait{font-size:clamp(20px,3vw,34px);opacity:.7;color:#fff}
-.display-finished{font-size:clamp(24px,3.5vw,44px);font-weight:800;color:#fff}
+.display-wait{font-size:clamp(20px,3vw,34px);opacity:.7;color:#000}
+.display-finished{font-size:clamp(24px,3.5vw,44px);font-weight:800;color:#000}
 @media(max-width:700px){
   .display-board{grid-template-columns:1fr}
   .display-stage{font-size:clamp(180px,48vw,420px)}
@@ -202,7 +206,7 @@ body.display-mode .display-board{
 </head>
 <body>
 <header>
-<h1>🎪 1-B 文化祭 グループ管理</h1>
+<h1> 1-B 文化祭 グループ管理</h1>
 <div class="add">
 <input id="name" placeholder="グループ名（例：Aグループ）" autocomplete="off">
 <button class="primary" id="addBtn">追加</button><button class="danger" id="resetAllBtn">🗑️ 全データを消去</button>
@@ -230,7 +234,7 @@ body.display-mode .display-board{
 </div>
 <div class="finished-area" id="finishedArea"><div class="finished-title">✅ タイマー終了チーム（縮小表示）</div><div id="finishedList" class="finished-list"><span class="small">まだ終了したチームはいません。</span></div></div>
 <div class="ranking" id="ranking">
-<h2>🏆 タイマー終了ランキング</h2>
+<h2>🏆 ランキング</h2>
 <div id="rankingList" class="small">まだ終了したグループはいません。</div>
 </div>
 
@@ -239,7 +243,7 @@ body.display-mode .display-board{
      target="_blank"
      rel="noopener"
      style="display:inline-block;background:#1769e0;color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:14px 22px;border-radius:12px;">
-    👥 スタッフ画面を開く
+    スタッフ画面を開く
   </a>
 </div>
 
@@ -317,22 +321,6 @@ function setConnectionError(message){
   setStatus(message,"error");
 }
 
-// ===== 状況モニター用のプレゼンス（在席）情報 =====
-const sessionId="sess_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2);
-let presenceSetup=false;
-function setupPresence(){
-  if(presenceSetup||!db)return;
-  presenceSetup=true;
-  const pageLabel = isDisplayMode ? ("ステージ表示（レーン"+(displayParam||"A").toUpperCase()+"）") : "メイン管理画面";
-  const presenceRef=db.ref("presence/"+sessionId);
-  presenceRef.onDisconnect().remove();
-  presenceRef.set({
-    page:pageLabel,
-    connectedAt:firebase.database.ServerValue.TIMESTAMP,
-    userAgent:navigator.userAgent
-  });
-}
-
 (function initFirebase(){
   if(!window.firebase || typeof firebase.initializeApp!=="function" || typeof firebase.database!=="function"){
     setConnectionError("🔴 Firebase SDKを読み込めませんでした。ページを再読み込みしてください。");
@@ -350,7 +338,6 @@ function setupPresence(){
       firebaseConnected=snap.val()===true;
       if(firebaseConnected){
         setStatus("🟢 接続OK・全端末で共有中","ok");
-        setupPresence();
       }else if(!firebaseReadOK){
         setStatus("🟠 Firebase接続待ち…","waiting");
       }
