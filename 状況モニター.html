@@ -13,6 +13,7 @@ h1{font-size:22px;margin:0 0 4px}
 main{padding:14px;max-width:900px;margin:auto}
 section.block{background:#fff;border:1px solid #ddd;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 2px 7px #0000000d}
 h2{font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+h3.sub{font-size:14px;margin:18px 0 8px;display:flex;align-items:center;gap:6px}
 .small{font-size:12px;color:#666}
 .empty{text-align:center;padding:24px 15px;color:#888;font-size:13px}
 
@@ -87,12 +88,21 @@ h2{font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
 
 <section class="block">
   <h2>🚨 次の異変・一覧管理</h2>
-  <div class="small" style="margin-bottom:8px">ここで追加・編集・削除した項目が、各レーンの個別管理画面に「次の異変→〇〇」として順番に表示されます（＋1、または0に戻すたびに次の項目に進みます）。</div>
+  <div class="small" style="margin-bottom:8px">ここで追加・編集・削除した項目が、各レーンの個別管理画面に「次の異変」として表示されます。子供用・通常用は別々のリストで管理され、グループ管理画面でレーンに案内するときに選んだ方の順番で進みます（＋1、または0に戻すたびに次の項目に進みます）。</div>
+
+  <h3 class="sub">🧒 子供用</h3>
   <div class="event-add-box">
-    <input id="newEventText" placeholder="新しい項目を入力（例：照明が変わる）" autocomplete="off">
-    <button class="lane-pause-btn to-resume" id="addEventBtn">追加</button>
+    <input id="newEventText_kids" placeholder="新しい項目を入力（例：照明が変わる）" autocomplete="off">
+    <button class="lane-pause-btn to-resume" id="addEventBtn_kids">追加</button>
   </div>
-  <div id="eventListBox"><div class="empty">読み込み中…</div></div>
+  <div id="eventListBox_kids"><div class="empty">読み込み中…</div></div>
+
+  <h3 class="sub">👤 通常用</h3>
+  <div class="event-add-box">
+    <input id="newEventText_normal" placeholder="新しい項目を入力（例：照明が変わる）" autocomplete="off">
+    <button class="lane-pause-btn to-resume" id="addEventBtn_normal">追加</button>
+  </div>
+  <div id="eventListBox_normal"><div class="empty">読み込み中…</div></div>
 </section>
 
 <section class="block">
@@ -106,7 +116,7 @@ h2{font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
   </div>
 </section>
 
-<div class="small" style="text-align:center;margin-top:-6px">このページでは、各レーンの運用・休止の切り替えと「次の異変」一覧の編集のみ行えます。それ以外の編集や操作はできません。</div>
+<div class="small" style="text-align:center;margin-top:-6px">このページでは、各レーンの運用・休止の切り替えと「次の異変」一覧（子供用・通常用）の編集のみ行えます。それ以外の編集や操作はできません。</div>
 
 </main>
 
@@ -172,6 +182,7 @@ function getLaneGroups(data,lane){
     .map(([id,g])=>({id,g}));
 }
 function isLanePaused(lane){ return !!(latestLaneStatus[lane]&&latestLaneStatus[lane].paused); }
+function eventTypeLabel(g){ return g.eventType==="kids" ? "🧒 子供用" : "👤 通常用"; }
 
 // ===== 端末アイコン・種類のざっくり判定（あくまで目安） =====
 function deviceLabel(ua){
@@ -233,10 +244,11 @@ function renderLanes(){
         <div class="name">${esc(g.name||"名称未設定")}</div>
         <div class="row"><span>${badge}</span><span class="timer-num">${formatTime(rem)}</span></div>
         <div class="row"><span>ステージ</span><span>${Number(g.stage||0)}</span></div>
+        <div class="row"><span>異変の種類</span><span>${eventTypeLabel(g)}</span></div>
       </div>`;
     }
     const nextHtml = next
-      ? `<div class="lane-next">⏳ 次の組：<b>${esc(next.g.name||"名称未設定")}</b></div>`
+      ? `<div class="lane-next">⏳ 次の組：<b>${esc(next.g.name||"名称未設定")}</b>（${eventTypeLabel(next.g)}）</div>`
       : `<div class="lane-next">⏳ 次の組：なし</div>`;
     const statusRow=`<div class="lane-status-row">
       <span class="lane-status-badge ${paused?"paused":"running"}">${paused?"🔴 休止中":"🟢 運用中"}</span>
@@ -278,54 +290,59 @@ window.toggleLanePause=async function(lane){
   }
 };
 
-// ===== 次の異変・一覧管理 =====
-function getSortedEventEntries(){
-  return Object.entries(latestEvents).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0));
+// ===== 次の異変・一覧管理（子供用／通常用） =====
+function getSortedEventEntries(type){
+  const obj=(latestEvents&&latestEvents[type])||{};
+  return Object.entries(obj).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0));
 }
 function renderEvents(){
-  const box=document.getElementById("eventListBox");
-  const items=getSortedEventEntries();
-  if(!items.length){
-    box.innerHTML='<div class="empty">まだ項目がありません。上の欄から追加してください。</div>';
-    return;
-  }
-  box.innerHTML=items.map(([id,ev],i)=>`
-    <div class="event-row" data-id="${esc(id)}">
-      <span class="event-num">${i+1}.</span>
-      <input class="event-text" value="${esc(ev.text||"")}" data-id="${esc(id)}">
-      <button class="event-save" data-id="${esc(id)}">保存</button>
-      <button class="event-del" data-id="${esc(id)}">削除</button>
-    </div>
-  `).join("");
-  box.querySelectorAll(".event-save").forEach(btn=>btn.addEventListener("click",()=>saveEvent(btn.dataset.id)));
-  box.querySelectorAll(".event-del").forEach(btn=>btn.addEventListener("click",()=>deleteEvent(btn.dataset.id)));
+  ["kids","normal"].forEach(type=>{
+    const box=document.getElementById("eventListBox_"+type);
+    const items=getSortedEventEntries(type);
+    if(!items.length){
+      box.innerHTML='<div class="empty">まだ項目がありません。上の欄から追加してください。</div>';
+      return;
+    }
+    box.innerHTML=items.map(([id,ev],i)=>`
+      <div class="event-row" data-id="${esc(id)}">
+        <span class="event-num">${i+1}.</span>
+        <input class="event-text" value="${esc(ev.text||"")}" data-id="${esc(id)}">
+        <button class="event-save" data-id="${esc(id)}" data-type="${type}">保存</button>
+        <button class="event-del" data-id="${esc(id)}" data-type="${type}">削除</button>
+      </div>
+    `).join("");
+    box.querySelectorAll(".event-save").forEach(btn=>btn.addEventListener("click",()=>saveEvent(btn.dataset.type,btn.dataset.id)));
+    box.querySelectorAll(".event-del").forEach(btn=>btn.addEventListener("click",()=>deleteEvent(btn.dataset.type,btn.dataset.id)));
+  });
 }
-async function addEvent(){
+async function addEvent(type){
   if(!db){ alert("Firebaseに接続していないため操作できません。"); return; }
-  const input=document.getElementById("newEventText");
+  const input=document.getElementById("newEventText_"+type);
   const text=input.value.trim();
   if(!text){ alert("項目の内容を入力してください。"); return; }
   try{
-    await db.ref("eventList").push({text,createdAt:Date.now()});
+    await db.ref("eventList/"+type).push({text,createdAt:Date.now()});
     input.value="";
   }catch(e){ alert("🔴 追加に失敗しました。\n"+(e.message||e)); }
 }
-async function saveEvent(id){
+async function saveEvent(type,id){
   if(!db){ alert("Firebaseに接続していないため操作できません。"); return; }
-  const input=document.querySelector(`.event-text[data-id="${CSS.escape(id)}"]`);
+  const input=document.querySelector(`#eventListBox_${type} .event-text[data-id="${CSS.escape(id)}"]`);
   const text=input?input.value.trim():"";
   if(!text){ alert("項目の内容を入力してください。"); return; }
-  try{ await db.ref("eventList/"+id).update({text}); }
+  try{ await db.ref("eventList/"+type+"/"+id).update({text}); }
   catch(e){ alert("🔴 保存に失敗しました。\n"+(e.message||e)); }
 }
-async function deleteEvent(id){
+async function deleteEvent(type,id){
   if(!db){ alert("Firebaseに接続していないため操作できません。"); return; }
   if(!confirm("この項目を削除しますか？")) return;
-  try{ await db.ref("eventList/"+id).remove(); }
+  try{ await db.ref("eventList/"+type+"/"+id).remove(); }
   catch(e){ alert("🔴 削除に失敗しました。\n"+(e.message||e)); }
 }
-document.getElementById("addEventBtn").onclick=addEvent;
-document.getElementById("newEventText").addEventListener("keydown",e=>{if(e.key==="Enter")addEvent();});
+document.getElementById("addEventBtn_kids").onclick=()=>addEvent("kids");
+document.getElementById("newEventText_kids").addEventListener("keydown",e=>{if(e.key==="Enter")addEvent("kids");});
+document.getElementById("addEventBtn_normal").onclick=()=>addEvent("normal");
+document.getElementById("newEventText_normal").addEventListener("keydown",e=>{if(e.key==="Enter")addEvent("normal");});
 
 function renderFirebaseInfo(){
   document.getElementById("fbConnected").textContent = firebaseConnected ? "🟢 接続中" : "🔴 未接続";
