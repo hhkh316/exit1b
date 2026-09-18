@@ -13,6 +13,7 @@ h1{font-size:22px;margin:0 0 4px}
 .lane-switch a{color:#1769e0;text-decoration:none;font-weight:700}
 .status{font-size:13px;margin:6px 0 0;color:#5f6368}
 button{font:inherit;border:0;border-radius:10px;padding:11px 14px;font-weight:700;background:#e9edf2;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
 .primary{background:#1769e0;color:#fff}
 .danger{background:#d93025;color:#fff}
 input{font:inherit;border:1px solid #c8cdd3;border-radius:10px;padding:12px;background:#fff}
@@ -37,6 +38,21 @@ main{padding:14px;max-width:640px;margin:auto}
   50%{transform:scale(1.02)}
 }
 
+/* ===== レーン休止バナー（状況モニターからレーンが休止されている間、常時表示） ===== */
+.lane-status-banner{
+  display:none;
+  background:#a32017;
+  color:#fff;
+  border-radius:16px;
+  padding:18px;
+  margin-bottom:14px;
+  text-align:center;
+  font-size:22px;
+  font-weight:900;
+  box-shadow:0 4px 14px rgba(163,32,23,.35);
+}
+.lane-status-banner .sub{display:block;font-size:13px;font-weight:700;opacity:.9;margin-top:4px}
+
 /* ===== 再開トースト（数秒で自動的に消える） ===== */
 .resumed-toast{
   display:none;
@@ -56,6 +72,13 @@ main{padding:14px;max-width:640px;margin:auto}
   text-align:center;font-size:14px;font-weight:700;
 }
 .lane-count-box b{font-size:20px}
+
+/* ===== 異変準備 開始/完了 トグルボタン ===== */
+.prep-row{margin:12px 0}
+.prep-btn{width:100%;min-height:58px;font-size:17px;font-weight:900;border-radius:14px;border:0;cursor:pointer}
+.prep-btn.prep-start{background:#e0a000;color:#fff}
+.prep-btn.prep-complete{background:#1e8e3e;color:#fff}
+.prep-btn:disabled{opacity:.45;cursor:not-allowed}
 
 .card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 7px #0000000d}
 .top{display:flex;align-items:center;gap:8px}
@@ -88,10 +111,11 @@ main{padding:14px;max-width:640px;margin:auto}
 <div class="status" id="status">🟡 Firebase確認中…</div>
 </header>
 <main>
+<div id="laneStatusBanner" class="lane-status-banner">⏸ このレーンは休止中です<span class="sub">タイマーの再開・ステージのカウント・組の追加はできません</span></div>
 <div id="pausedBanner" class="paused-banner">⏸ タイマーが停止中です</div>
 <div id="resumedToast" class="resumed-toast">▶ タイマーが再開されました</div>
 
-<div class="lane-count-box">このレーン：<b id="laneCount">0</b>組（最大2組）</div>
+<div class="lane-count-box" id="nextEventBox">次の異変→<b id="nextEventText">-</b></div>
 
 <div id="activeArea"></div>
 <div id="waitingArea"></div>
@@ -132,7 +156,9 @@ document.getElementById("laneSwitch").innerHTML=
 
 const status=document.getElementById("status");
 let latestData={};
-let db=null, groupsRef=null, connectedRef=null;
+let latestLaneStatus={};
+let latestEvents={};
+let db=null, groupsRef=null, connectedRef=null, laneStatusRef=null, eventListRef=null;
 let firebaseConnected=false, firebaseInitOK=false, firebaseErrorShown=false, firebaseReadOK=false;
 
 function setStatus(text,kind){ status.textContent=text; status.dataset.kind=kind||""; }
@@ -174,6 +200,8 @@ function initFirebase(){
     db=firebase.database();
     groupsRef=db.ref("groups");
     connectedRef=db.ref(".info/connected");
+    laneStatusRef=db.ref("laneStatus");
+    eventListRef=db.ref("eventList");
     setStatus("🟡 Firebaseに接続しています…","checking");
 
     connectedRef.on("value",snap=>{
@@ -188,6 +216,16 @@ function initFirebase(){
       render(latestData);
       if(firebaseConnected) setStatus("🟢 接続OK・全端末で共有中","ok");
     },err=>setConnectionError(explainFirebaseError(err)));
+
+    laneStatusRef.on("value",snap=>{
+      latestLaneStatus=snap.val()||{};
+      render(latestData);
+    },err=>setConnectionError(explainFirebaseError(err)));
+
+    eventListRef.on("value",snap=>{
+      latestEvents=snap.val()||{};
+      render(latestData);
+    },err=>setConnectionError(explainFirebaseError(err)));
   }catch(err){
     setConnectionError(explainFirebaseError(err));
   }
@@ -201,10 +239,14 @@ setTimeout(()=>{
 
 function isWaiting(g){ return g&&g.type==="waiting"; }
 function isGroup(g){ return g&&!isWaiting(g); }
+function isLanePaused(lane){ return !!(latestLaneStatus[lane]&&latestLaneStatus[lane].paused); }
+function getSortedEvents(){
+  return Object.entries(latestEvents).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).map(([,e])=>e.text||"");
+}
 function getLimitMs(g){
   let ms=Number(g.limitSec);
   if(!Number.isFinite(ms)||ms<=0) ms=Number(g.timeLimitSec);
-  if(!Number.isFinite(ms)||ms<=0) ms=300;
+  if(!Number.isFinite(ms)||ms<=0) ms=180;
   return ms*1000;
 }
 function getRemainingMs(g,now=Date.now()){
@@ -251,14 +293,27 @@ function hideResumedToastImmediately(){
   if(resumedToastTimer){ clearTimeout(resumedToastTimer); resumedToastTimer=null; }
 }
 
+function renderNextEvent(current){
+  const box=document.getElementById("nextEventText");
+  const events=getSortedEvents();
+  if(!current || !events.length){ box.textContent="-"; return; }
+  const len=events.length;
+  const idx=((Number(current.g.eventIndex)||0)%len+len)%len;
+  box.textContent=events[idx];
+}
+
 function render(data){
   const groups=getLaneGroups(data,LANE);
-  document.getElementById("laneCount").textContent=groups.length;
 
   const current=groups[0];
   const waiting=groups[1];
 
+  renderNextEvent(current);
+
   const pausedBanner=document.getElementById("pausedBanner");
+  const laneStatusBanner=document.getElementById("laneStatusBanner");
+  const lanePaused=isLanePaused(LANE);
+  laneStatusBanner.style.display=lanePaused?"block":"none";
 
   if(!current){
     lastActiveId=null;
@@ -279,7 +334,7 @@ function render(data){
     const prevSeen=seenResumedAt[current.id]||null;
     const nowVal=current.g.resumedAt||null;
     // 「停止中だった組が再開された」時だけトーストを出す（初回のタイマー開始では出さない）
-    if(nowVal && nowVal!==prevSeen && wasPausedBefore[current.id]){
+    if(nowVal && nowVal!==prevSeen && wasPausedBefore[current.id] && !lanePaused){
       showResumedToast();
     }
     seenResumedAt[current.id]=nowVal;
@@ -287,30 +342,33 @@ function render(data){
   }
 
   // 停止中バナー：pausedAtがある＝明示的に「停止」が押されて再開待ちの状態
-  pausedBanner.style.display = current.g.pausedAt ? "block" : "none";
+  pausedBanner.style.display = (current.g.pausedAt && !lanePaused) ? "block" : "none";
 
-  renderActive(current);
-  renderWaiting(waiting, current);
+  renderActive(current,lanePaused);
+  renderWaiting(waiting, current, lanePaused);
 }
 
-function renderActive(entry){
+function renderActive(entry,lanePaused){
   const {id,g}=entry;
   const rem=getRemainingMs(g);
   const limitSec=Math.max(1,Math.round(getLimitMs(g)/1000));
-  const statusLabel = g.finishedAt ? "⏰ 終了・次へ待ち" : (g.startAt ? "▶ 体験中" : (g.pausedAt ? "⏸ 停止中" : "🆕 未開始"));
+  const statusLabel = lanePaused ? "⏸ 休止中" : (g.finishedAt ? "⏰ 終了・次へ待ち" : (g.startAt ? "▶ 体験中" : (g.pausedAt ? "⏸ 停止中" : "🆕 未開始")));
   const area=document.getElementById("activeArea");
   area.innerHTML=`<div class="card">
     <div class="top"><div class="group-name">${esc(g.name||"名称未設定")}</div><span class="badge running">${statusLabel}</span></div>
     <div class="stage-label">現在のステージ</div>
     <div class="stage">${Number(g.stage||0)}</div>
     <div class="controls">
-      <button data-action="minus">− 1</button>
-      <button class="primary" data-action="plus">＋ 1</button>
-      <button class="reset" data-action="reset">0に戻す</button>
+      <button data-action="minus" ${lanePaused?"disabled":""}>− 1</button>
+      <button class="primary" data-action="plus" ${lanePaused?"disabled":""}>＋ 1</button>
+      <button class="reset" data-action="reset" ${lanePaused?"disabled":""}>0に戻す</button>
+    </div>
+    <div class="prep-row">
+      <button class="prep-btn ${g.startAt?"prep-start":"prep-complete"}" data-action="${g.startAt?"stop":"start"}" ${lanePaused?"disabled":""}>${g.startAt?"🛠 異変準備開始（タイマー停止）":"▶ 異変準備完了（タイマー再開）"}</button>
     </div>
     <div class="timer">${formatTime(rem)}</div>
     <div class="timer-controls">
-      <button class="primary" data-action="start">${g.startAt?"一時停止から再開":"タイマー開始"}</button>
+      <button class="primary" data-action="start" ${lanePaused?"disabled":""}>${g.startAt?"一時停止から再開":"タイマー開始"}</button>
       <button data-action="stop">停止</button>
       <button data-action="timerReset">時間をリセット</button>
     </div>
@@ -322,17 +380,17 @@ function renderActive(entry){
     <div class="small" style="text-align:center;margin-top:10px">※操作内容はすべての画面に反映されます</div>
   </div>`;
   area.querySelectorAll("button[data-action]").forEach(btn=>{
-    btn.addEventListener("click",()=>act(id,g,btn.dataset.action,area));
+    btn.addEventListener("click",()=>act(id,g,btn.dataset.action,area,lanePaused));
   });
 }
 
-function renderWaiting(waitingEntry,currentEntry){
+function renderWaiting(waitingEntry,currentEntry,lanePaused){
   const box=document.getElementById("waitingArea");
   if(!waitingEntry){ box.innerHTML=""; return; }
   const g=waitingEntry.g;
   let nextBtn="";
   if(currentEntry.g.finishedAt){
-    nextBtn=`<button class="primary next-btn" id="nextBtn">➡️ 次へ（${esc(g.name||"名称未設定")}を開始できる状態にする）</button>`;
+    nextBtn=`<button class="primary next-btn" id="nextBtn" ${lanePaused?"disabled":""}>➡️ 次へ（${esc(g.name||"名称未設定")}を開始できる状態にする）</button>`;
   }
   box.innerHTML=`<div class="waiting-card">
     <span class="badge waitingnext">⏳ 体験待ち</span>
@@ -340,14 +398,25 @@ function renderWaiting(waitingEntry,currentEntry){
     ${nextBtn}
   </div>`;
   const btn=document.getElementById("nextBtn");
-  if(btn) btn.onclick=()=>advanceLane(currentEntry.id,currentEntry.g);
+  if(btn) btn.onclick=()=>advanceLane(currentEntry.id,currentEntry.g,lanePaused);
 }
 
-async function act(id,g,action,card){
+async function act(id,g,action,card,lanePaused){
+  if(lanePaused && (action==="plus"||action==="minus"||action==="reset"||action==="start")){
+    return alert(`レーン${LANE}は現在休止中のため、この操作はできません。状況モニターから運用を再開してください。`);
+  }
   const ref=groupsRef.child(id);
-  if(action==="plus") await ref.update({stage:Math.max(0,Number(g.stage||0)+1)});
+  if(action==="plus"){
+    const events=getSortedEvents();
+    const nextIndex=events.length?((Number(g.eventIndex)||0)+1)%events.length:0;
+    await ref.update({stage:Math.max(0,Number(g.stage||0)+1),eventIndex:nextIndex});
+  }
   if(action==="minus") await ref.update({stage:Math.max(0,Number(g.stage||0)-1)});
-  if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")) await ref.update({stage:0});
+  if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")){
+    const events=getSortedEvents();
+    const nextIndex=events.length?((Number(g.eventIndex)||0)+1)%events.length:0;
+    await ref.update({stage:0,eventIndex:nextIndex});
+  }
   if(action==="start"){
     const rem=getRemainingMs(g);
     await ref.update({remainingMs:rem,startAt:Date.now(),limitSec:Math.max(1,Math.round(getLimitMs(g)/1000)),finishedAt:null,finishedStage:null,pausedAt:null,resumedAt:Date.now()});
@@ -368,7 +437,8 @@ async function act(id,g,action,card){
   }
 }
 
-async function advanceLane(finishedId,finishedGroup){
+async function advanceLane(finishedId,finishedGroup,lanePaused){
+  if(lanePaused) return alert(`レーン${LANE}は現在休止中のため次の組に進められません。状況モニターから運用を再開してください。`);
   const groups=getLaneGroups(latestData,LANE);
   if(!groups.length||groups[0].id!==finishedId){
     alert("レーンの状態が変わりました。画面を確認してください。");
@@ -395,6 +465,7 @@ async function advanceLane(finishedId,finishedGroup){
     updates["groups/"+next.id+"/startAt"]=null;
     updates["groups/"+next.id+"/pausedAt"]=null;
     updates["groups/"+next.id+"/resumedAt"]=null;
+    updates["groups/"+next.id+"/eventIndex"]=0;
   }
   await db.ref().update(updates);
 }
@@ -406,6 +477,7 @@ async function addToLane(){
   const input=document.getElementById("newName");
   const msg=document.getElementById("addMessage");
   msg.textContent="";
+  if(isLanePaused(LANE)){ msg.textContent=`レーン${LANE}は現在休止中のため追加できません。`; return; }
   const name=input.value.trim();
   if(!name){ msg.textContent="グループ名を入力してください。"; return; }
   const duplicate=Object.values(latestData).some(g=>g&&String(g.name||"").trim()===name);
@@ -414,8 +486,8 @@ async function addToLane(){
   if(occupied.length>=2){ msg.textContent=`レーン${LANE}は満員です（体験中1組＋体験待ち1組）。`; return; }
   const now=Date.now();
   await groupsRef.push({
-    type:"group",name,stage:0,limitSec:300,remainingMs:300000,
-    startAt:null,createdAt:now,lane:LANE,laneAssignedAt:now,pausedAt:null,resumedAt:null
+    type:"group",name,stage:0,limitSec:180,remainingMs:180000,
+    startAt:null,createdAt:now,lane:LANE,laneAssignedAt:now,pausedAt:null,resumedAt:null,eventIndex:0
   });
   input.value="";
 }
