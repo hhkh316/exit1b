@@ -13,6 +13,7 @@ h1{font-size:22px;margin:0 0 10px}
 input{font:inherit;border:1px solid #c8cdd3;border-radius:10px;padding:12px;background:#fff}
 #name,#waitingName{flex:1;min-width:0}
 button{font:inherit;border:0;border-radius:10px;padding:11px 14px;font-weight:700;background:#e9edf2;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
 .primary{background:#1769e0;color:#fff}
 .danger{background:#d93025;color:#fff}
 main{padding:14px;max-width:900px;margin:auto}
@@ -23,9 +24,12 @@ main{padding:14px;max-width:900px;margin:auto}
 .lanes{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
 .lane{background:#fff;border:1px solid #ddd;border-radius:14px;padding:10px}
 .lane-title{font-size:16px;font-weight:900;text-align:center}
+.lane-title-row{display:flex;align-items:center;justify-content:center;gap:6px}
+.lane-paused-pill{font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:#fdeaea;color:#d93025}
 .lane-count{text-align:center;font-size:12px;color:#666;margin:3px 0 8px}
 .lane-groups{font-size:13px;line-height:1.5;overflow-wrap:anywhere}
 .lane-empty{text-align:center;color:#888;font-size:13px;padding:8px 4px}
+.lane-paused-banner{background:#fdeaea;border:1px solid #f3b4b0;border-radius:10px;padding:8px 10px;margin:0 0 8px;font-size:13px;color:#a32017;font-weight:800;text-align:center}
 .waiting{background:#fff;border:2px solid #e0a000;border-radius:16px;padding:14px;margin-bottom:12px}
 .waiting-head{display:flex;align-items:center;gap:8px}
 .waiting-title{font-size:18px;font-weight:900;flex:1}
@@ -52,6 +56,7 @@ main{padding:14px;max-width:900px;margin:auto}
 .finished-list{display:flex;flex-wrap:wrap;gap:6px}
 .finished-item{font-size:12px;background:#f1f3f5;border-radius:9px;padding:7px 9px;min-width:120px}
 .notice{background:#fff3cd;border:2px solid #f0b400;border-radius:14px;padding:12px;margin-bottom:12px;box-shadow:0 2px 8px #00000012}
+.notice.paused-notice{background:#fdeaea;border-color:#d93025}
 @media(min-width:900px) and (orientation:landscape){
   main{max-width:none;padding:10px 12px}
   .lanes{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
@@ -72,6 +77,7 @@ main{padding:14px;max-width:900px;margin:auto}
   .lane-title{text-align:left}
   .lane-count{text-align:left;margin:0}
   .lane-groups,.lane-empty{grid-column:1/-1}
+  .lane-paused-banner{grid-column:1/-1}
   .controls{grid-template-columns:1fr 1fr}
   .controls .reset{grid-column:1/-1}
   .stage{font-size:42px}
@@ -88,7 +94,7 @@ main{padding:14px;max-width:900px;margin:auto}
 
 /* ステージ表示専用モード */
 body.display-mode{background:#ffd400;color:#000;overflow:hidden}
-body.display-mode header, body.display-mode #finishNotice, body.display-mode .summary,
+body.display-mode header, body.display-mode #finishNotice, body.display-mode #laneNotice, body.display-mode .summary,
 body.display-mode #finishedArea, body.display-mode #ranking, body.display-mode .waiting,
 body.display-mode #list, body.display-mode .status{display:none!important}
 body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100vh}
@@ -137,8 +143,23 @@ body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100v
   color:#000;
   text-shadow:none;
 }
+.display-paused-banner{
+  display:none;
+  font-size:clamp(48px,9vw,110px);
+  font-weight:1000;
+  margin-bottom:10px;
+  white-space:nowrap;
+  color:#a32017;
+  text-shadow:none;
+}
 .display-lane.is-finished .display-finished-banner{display:block}
 .display-lane.is-finished .display-timer{font-size:clamp(28px,4vw,52px)}
+.display-lane.is-paused .display-paused-banner{display:block}
+.display-lane.is-paused .display-finished-banner{display:none}
+.display-lane.is-paused .display-team,
+.display-lane.is-paused .display-stage,
+.display-lane.is-paused .display-stage-label{opacity:.35}
+.display-lane.is-paused .display-timer{font-size:clamp(28px,4vw,52px)}
 .display-wait{font-size:clamp(20px,3vw,34px);opacity:.7;color:#000}
 .display-finished{font-size:clamp(24px,3.5vw,44px);font-weight:800;color:#000}
 @media(max-width:700px){
@@ -210,8 +231,9 @@ body.display-mode .display-board{
 </header>
 <main>
 <div id="displayBoard" class="display-board" style="display:none"></div>
-<div class="status" id="status">🟡 Firebase確認中…</div><div id="buildInfo" class="small" style="margin:-8px 0 10px">安定版（2レーン） / v2026-09-03-1</div>
+<div class="status" id="status">🟡 Firebase確認中…</div><div id="buildInfo" class="small" style="margin:-8px 0 10px">安定版（2レーン） / v2026-09-18-1</div>
 <div id="finishNotice"></div>
+<div id="laneNotice"></div>
 <div class="summary">
 <div class="summary-label">最短で終了するグループまで</div>
 <div class="summary-time" id="shortest">--:--</div>
@@ -225,8 +247,8 @@ body.display-mode .display-board{
 </div>
 <div id="list"></div>
 <div class="lanes">
-<div class="lane"><div class="lane-title">レーンA</div><div class="lane-count" data-lane-count="A">0組（最大2組）</div><div class="lane-groups" data-lane-groups="A"><div class="lane-empty">未割り当て</div></div></div>
-<div class="lane"><div class="lane-title">レーンB</div><div class="lane-count" data-lane-count="B">0組（最大2組）</div><div class="lane-groups" data-lane-groups="B"><div class="lane-empty">未割り当て</div></div></div>
+<div class="lane"><div class="lane-title-row"><div class="lane-title">レーンA</div><span class="lane-paused-pill" data-lane-pill="A" style="display:none">⏸ 休止中</span></div><div class="lane-count" data-lane-count="A">0組（最大2組）</div><div class="lane-groups" data-lane-groups="A"><div class="lane-empty">未割り当て</div></div></div>
+<div class="lane"><div class="lane-title-row"><div class="lane-title">レーンB</div><span class="lane-paused-pill" data-lane-pill="B" style="display:none">⏸ 休止中</span></div><div class="lane-count" data-lane-count="B">0組（最大2組）</div><div class="lane-groups" data-lane-groups="B"><div class="lane-empty">未割り当て</div></div></div>
 </div>
 <div class="finished-area" id="finishedArea"><div class="finished-title">✅ タイマー終了チーム（縮小表示）</div><div id="finishedList" class="finished-list"><span class="small">まだ終了したチームはいません。</span></div></div>
 <div class="ranking" id="ranking">
@@ -269,11 +291,13 @@ if(isDisplayMode){
       <img class="plane-img" alt="" src="data:image/png;base64,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">
     </div>`;
   document.body.appendChild(flight);
-  const displayLanes=[(displayParam||"A").toUpperCase()]; document.getElementById("displayBoard").innerHTML=displayLanes.map(l=>`<div class="display-lane" data-display-lane="${l}"><div class="display-lane-label">レーン${l}</div><div class="display-finished-banner">終了しました</div><div class="display-team">読み込み中…</div><div class="display-stage">0</div><div class="display-stage-label">STAGE</div><div class="display-timer">--:--</div></div>`).join("");
+  const displayLanes=[(displayParam||"A").toUpperCase()]; document.getElementById("displayBoard").innerHTML=displayLanes.map(l=>`<div class="display-lane" data-display-lane="${l}"><div class="display-lane-label">レーン${l}</div><div class="display-finished-banner">終了しました</div><div class="display-paused-banner">休止中です</div><div class="display-team">読み込み中…</div><div class="display-stage">0</div><div class="display-stage-label">STAGE</div><div class="display-timer">--:--</div></div>`).join("");
 }
 const list=document.getElementById("list"), status=document.getElementById("status");
 let latestData={};
-let db=null, groupsRef=null, connectedRef=null;
+let latestLaneStatus={};
+let latestEvents={};
+let db=null, groupsRef=null, connectedRef=null, laneStatusRef=null, eventListRef=null;
 let firebaseConnected=false;
 let firebaseInitOK=false;
 
@@ -344,6 +368,8 @@ function setupPresence(){
     db=firebase.database();
     groupsRef=db.ref("groups");
     connectedRef=db.ref(".info/connected");
+    laneStatusRef=db.ref("laneStatus");
+    eventListRef=db.ref("eventList");
     setStatus("🟡 Firebaseに接続しています…","checking");
 
     connectedRef.on("value",snap=>{
@@ -370,6 +396,16 @@ function setupPresence(){
       setStatus("🟢 Firebase接続OK・全端末で共有できます","ok");
     }).catch(err=>setConnectionError(explainFirebaseError(err)));
 
+    laneStatusRef.on("value",snap=>{
+      latestLaneStatus=snap.val()||{};
+      render(latestData);
+    },err=>setConnectionError(explainFirebaseError(err)));
+
+    eventListRef.on("value",snap=>{
+      latestEvents=snap.val()||{};
+      render(latestData);
+    },err=>setConnectionError(explainFirebaseError(err)));
+
   }catch(err){
     setConnectionError(explainFirebaseError(err));
   }
@@ -386,11 +422,15 @@ setTimeout(()=>{
 
 function isWaiting(g){ return g && g.type==="waiting"; }
 function isGroup(g){ return g && !isWaiting(g); }
+function isLanePaused(lane){ return !!(latestLaneStatus[lane]&&latestLaneStatus[lane].paused); }
+function getSortedEvents(){
+  return Object.entries(latestEvents).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).map(([,e])=>e.text||"");
+}
 
 function getLimitMs(g){
   let ms=Number(g.limitSec);
   if(!Number.isFinite(ms)||ms<=0) ms=Number(g.timeLimitSec);
-  if(!Number.isFinite(ms)||ms<=0) ms=300;
+  if(!Number.isFinite(ms)||ms<=0) ms=180;
   return ms*1000;
 }
 function getRemainingMs(g,now=Date.now()){
@@ -425,10 +465,17 @@ function renderSummary(data){
   el.textContent=formatTime(getRemainingMs(g));
   nm.textContent=(g.name||"名称未設定")+" が最短";
 }
+function renderLaneNotice(){
+  const box=document.getElementById("laneNotice");
+  if(!box)return;
+  const pausedLanes=["A","B"].filter(isLanePaused);
+  if(!pausedLanes.length){box.innerHTML="";return;}
+  box.innerHTML=`<div class="notice paused-notice">⏸ <b>休止中のレーン：</b>${pausedLanes.map(l=>"レーン"+l).join("・")}<br><span class="small" style="color:#a32017">休止中のレーンでは、タイマーの再開・ステージのカウントができません。運用に戻すには状況モニターから操作してください。</span></div>`;
+}
 function render(data){
   if(isDisplayMode){ renderDisplay(data); return; }
   renderSummary(data); renderLanes(data); renderFinished(data);
-  renderWaiting(data); renderRanking(data); showFinishNotice(data);
+  renderWaiting(data); renderRanking(data); showFinishNotice(data); renderLaneNotice();
   list.innerHTML="";
   const unassigned=Object.entries(data).filter(([,g])=>isGroup(g)&&!g.finishedAt&&!g.lane)
     .sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0));
@@ -444,6 +491,8 @@ function renderDisplay(data){
     const team=wrap.querySelector(".display-team");
     const stage=wrap.querySelector(".display-stage");
     const timer=wrap.querySelector(".display-timer");
+    const paused=isLanePaused(lane);
+    wrap.classList.toggle("is-paused",paused);
     const groups=getLaneGroups(data,lane);
     const currentEntry=groups[0];
     const current=currentEntry?.g;
@@ -453,7 +502,7 @@ function renderDisplay(data){
       wrap.classList.remove("is-finished");
       team.textContent="現在の組はありません";
       stage.textContent="0";
-      timer.textContent="--:--";
+      timer.textContent= paused ? "--:--" : "--:--";
       return;
     }
 
@@ -464,6 +513,11 @@ function renderDisplay(data){
 
     team.textContent=current.name||"名称未設定";
     stage.textContent=String(Number(current.stage||0));
+
+    if(paused){
+      timer.textContent=formatTime(getRemainingMs(current));
+      return;
+    }
 
     const expired=!!current.finishedAt || (!!current.startAt && getRemainingMs(current)<=0);
     if(expired){
@@ -480,15 +534,18 @@ function renderDisplay(data){
   });
 }
 
-function buildGroupCard(id,g){
+function buildGroupCard(id,g,paused){
+  paused=!!paused;
   const card=document.createElement("section"); card.className="card";
   const limitSec=Math.max(1,Math.round(getLimitMs(g)/1000)), rem=getRemainingMs(g);
+  const pausedNoticeHtml=paused?'<div class="small" style="color:#d93025;font-weight:800;margin:-4px 0 8px">⏸ このレーンは休止中のため、タイマーの再開とステージのカウントはできません。</div>':"";
   card.innerHTML=`<div class="top"><div class="group-name">${esc(g.name||"名称未設定")}</div><button class="danger" data-action="delete">削除</button></div>
+  ${pausedNoticeHtml}
   <div class="stage-label">現在のステージ</div><div class="stage">${Number(g.stage||0)}</div>
-  <div class="controls"><button data-action="minus">− 1</button><button class="primary" data-action="plus">＋ 1</button><button class="reset" data-action="reset">ステージを0に戻す</button></div>
+  <div class="controls"><button data-action="minus" ${paused?"disabled":""}>− 1</button><button class="primary" data-action="plus" ${paused?"disabled":""}>＋ 1</button><button class="reset" data-action="reset" ${paused?"disabled":""}>ステージを0に戻す</button></div>
   <hr style="border:0;border-top:1px solid #eee;margin:12px 0"><div class="stage-label">残り時間</div>
   <div class="timer" data-timer="${id}">${formatTime(rem)}</div>
-  <div class="timer-controls"><button class="primary" data-action="start">${g.startAt?"一時停止から再開":"タイマー開始"}</button><button data-action="stop">停止</button><button data-action="timerReset">時間をリセット</button></div>
+  <div class="timer-controls"><button class="primary" data-action="start" ${paused?"disabled":""}>${g.startAt?"一時停止から再開":"タイマー開始"}</button><button data-action="stop">停止</button><button data-action="timerReset">時間をリセット</button></div>
   <div class="limit-row"><span class="small">制限時間（分）</span><input type="number" min="1" step="1" value="${Math.max(1,Math.round(limitSec/60))}" data-limit><button data-action="setLimit">制限時間を変更</button></div>
   <div class="limit-row"><span class="small">レーン</span><select class="lane-select" data-lane-select><option value="" ${!g.lane?"selected":""}>未割り当て</option><option value="A" ${g.lane==="A"?"selected":""}>A</option><option value="B" ${g.lane==="B"?"selected":""}>B</option></select><button data-action="setLane">レーンを設定</button></div>
   <div class="small" style="text-align:center;margin-top:6px">※操作内容はすべてのiPadに反映されます</div>`;
@@ -503,16 +560,31 @@ function getLaneGroups(data,lane){
 function renderLanes(data){
   ["A","B"].forEach(lane=>{
     const groups=getLaneGroups(data,lane);
+    const paused=isLanePaused(lane);
     document.querySelector(`[data-lane-count="${lane}"]`).textContent=groups.length+"組（最大2組）";
+    const pill=document.querySelector(`[data-lane-pill="${lane}"]`);
+    if(pill) pill.style.display=paused?"inline-block":"none";
     const box=document.querySelector(`[data-lane-groups="${lane}"]`);
     box.innerHTML="";
-    if(!groups.length){box.innerHTML='<div class="lane-empty">空き</div>';return;}
+    if(paused){
+      const banner=document.createElement("div");
+      banner.className="lane-paused-banner";
+      banner.textContent="⏸ このレーンは休止中です（状況モニターから運用を再開してください）";
+      box.appendChild(banner);
+    }
+    if(!groups.length){
+      const empty=document.createElement("div");
+      empty.className="lane-empty";
+      empty.textContent="空き";
+      box.appendChild(empty);
+      return;
+    }
     groups.forEach(({id,g},i)=>{
-      const status=document.createElement("div");
-      status.style.cssText="font-size:12px;font-weight:800;margin:4px 2px 2px";
-      status.textContent=i===0 ? (g.finishedAt ? "⏰ 終了・次へ待ち" : "▶ 体験中") : "⏳ 体験待ち";
-      box.appendChild(status);
-      if(i===0 && g.finishedAt){
+      const statusEl=document.createElement("div");
+      statusEl.style.cssText="font-size:12px;font-weight:800;margin:4px 2px 2px";
+      statusEl.textContent=i===0 ? (g.finishedAt ? "⏰ 終了・次へ待ち" : "▶ 体験中") : "⏳ 体験待ち";
+      box.appendChild(statusEl);
+      if(i===0 && g.finishedAt && !paused){
         const next=document.createElement("button");
         next.className="primary";
         next.textContent="➡️ 次へ";
@@ -520,7 +592,7 @@ function renderLanes(data){
         next.onclick=()=>advanceLane(lane,id,g);
         box.appendChild(next);
       }
-      box.appendChild(buildGroupCard(id,g));
+      box.appendChild(buildGroupCard(id,g,paused));
     });
   });
 }
@@ -589,6 +661,7 @@ function showFinishNotice(data){
 
 function guideWaiting(id,g,lane){
   if(!lane)return alert("案内するレーンを選んでください。");
+  if(isLanePaused(lane)) return alert(`レーン${lane}は現在休止中のため案内できません。`);
   const occupied=getLaneGroups(latestData,lane);
   if(occupied.length>=2){
     return alert(`レーン${lane}は「体験中1組＋体験待ち1組」で満員です。\nどちらかが終了してから案内してください。`);
@@ -597,12 +670,13 @@ function guideWaiting(id,g,lane){
   if(duplicate)return alert(`⚠️「${g.name}」という名前はすでに使われています。`);
   const now=Date.now();
   groupsRef.child(id).set({
-    type:"group",name:g.name,stage:0,limitSec:300,remainingMs:300000,
-    startAt:null,createdAt:g.createdAt||now,lane:lane,laneAssignedAt:now
+    type:"group",name:g.name,stage:0,limitSec:180,remainingMs:180000,
+    startAt:null,createdAt:g.createdAt||now,lane:lane,laneAssignedAt:now,eventIndex:0
   });
 }
 
 async function advanceLane(lane, finishedId, finishedGroup){
+  if(isLanePaused(lane)) return alert(`レーン${lane}は現在休止中のため次の組に進められません。`);
   const groups=getLaneGroups(latestData,lane);
   if(!groups.length || groups[0].id!==finishedId){
     alert("レーンの状態が変わりました。画面を確認してください。");
@@ -629,6 +703,7 @@ async function advanceLane(lane, finishedId, finishedGroup){
     updates["groups/"+next.id+"/startAt"]=null;
     updates["groups/"+next.id+"/pausedAt"]=null;
     updates["groups/"+next.id+"/resumedAt"]=null;
+    updates["groups/"+next.id+"/eventIndex"]=0;
   }
   await db.ref().update(updates);
 }
@@ -656,9 +731,21 @@ setInterval(()=>{
 
 async function act(id,g,action,card){
   const ref=groupsRef.child(id);
-  if(action==="plus") await ref.update({stage:Math.max(0,Number(g.stage||0)+1)});
+  const lanePaused=g.lane && isLanePaused(g.lane);
+  if(lanePaused && (action==="plus"||action==="minus"||action==="reset"||action==="start")){
+    return alert(`レーン${g.lane}は現在休止中のため、この操作はできません。`);
+  }
+  if(action==="plus"){
+    const events=getSortedEvents();
+    const nextIndex=events.length?((Number(g.eventIndex)||0)+1)%events.length:0;
+    await ref.update({stage:Math.max(0,Number(g.stage||0)+1),eventIndex:nextIndex});
+  }
   if(action==="minus") await ref.update({stage:Math.max(0,Number(g.stage||0)-1)});
-  if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")) await ref.update({stage:0});
+  if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")){
+    const events=getSortedEvents();
+    const nextIndex=events.length?((Number(g.eventIndex)||0)+1)%events.length:0;
+    await ref.update({stage:0,eventIndex:nextIndex});
+  }
   if(action==="start"){
     const rem=getRemainingMs(g);
     await ref.update({remainingMs:rem,startAt:Date.now(),limitSec:Math.max(1,Math.round(getLimitMs(g)/1000)),finishedAt:null,finishedStage:null,pausedAt:null,resumedAt:Date.now()});
@@ -681,6 +768,7 @@ async function act(id,g,action,card){
     const select=card.querySelector("[data-lane-select]");
     const lane=select?select.value:"";
     if(lane){
+      if(isLanePaused(lane)) return alert(`レーン${lane}は現在休止中のため割り当てできません。`);
       const occupied=getLaneGroups(latestData,lane).filter(x=>x.name!==g.name);
       if(occupied.length>=2){
         return alert(`レーン${lane}は「体験中1組＋体験待ち1組」で満員です。`);
@@ -700,8 +788,8 @@ async function addGroup(){
   if(!name)return alert("グループ名を入力してください。");
   const duplicate=Object.values(latestData).some(g=>g&&String(g.name||"").trim()===name);
   if(duplicate)return alert(`⚠️「${name}」は被ってます！\\n同じ名前のグループ（または待ち組）がすでにあります。`);
-  const now=Date.now(), sec=300;
-  await groupsRef.push({type:"group",name,stage:0,limitSec:sec,remainingMs:sec*1000,startAt:null,createdAt:now,lane:""});
+  const now=Date.now(), sec=180;
+  await groupsRef.push({type:"group",name,stage:0,limitSec:sec,remainingMs:sec*1000,startAt:null,createdAt:now,lane:"",eventIndex:0});
   input.value="";
 }
 async function addWaiting(){
