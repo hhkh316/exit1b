@@ -386,7 +386,21 @@ function renderActive(entry,lanePaused){
 
 function renderWaiting(waitingEntry,currentEntry,lanePaused){
   const box=document.getElementById("waitingArea");
-  if(!waitingEntry){ box.innerHTML=""; return; }
+  const showNextBtn = !!(currentEntry.g.finishedAt && !lanePaused);
+
+  if(!waitingEntry){
+    if(showNextBtn){
+      box.innerHTML=`<div class="waiting-card">
+        <span class="badge waitingnext">⏳ 次の組はまだありません</span>
+        <button class="primary next-btn" id="nextBtn">➡️ 次へ</button>
+      </div>`;
+      document.getElementById("nextBtn").onclick=()=>advanceLane(currentEntry.id,currentEntry.g,lanePaused);
+    }else{
+      box.innerHTML="";
+    }
+    return;
+  }
+
   const g=waitingEntry.g;
   let nextBtn="";
   if(currentEntry.g.finishedAt){
