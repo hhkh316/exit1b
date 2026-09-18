@@ -115,7 +115,7 @@ main{padding:14px;max-width:640px;margin:auto}
 <div id="pausedBanner" class="paused-banner">⏸ タイマーが停止中です</div>
 <div id="resumedToast" class="resumed-toast">▶ タイマーが再開されました</div>
 
-<div class="lane-count-box" id="nextEventBox">次の異変→<b id="nextEventText">-</b></div>
+<div class="lane-count-box" id="nextEventBox"><span id="nextEventLabel">次の異変→</span><b id="nextEventText">-</b></div>
 
 <div id="activeArea"></div>
 <div id="waitingArea"></div>
@@ -124,6 +124,10 @@ main{padding:14px;max-width:640px;margin:auto}
   <div class="small" style="margin-bottom:8px">このレーンに直接グループを追加</div>
   <div class="add-box">
     <input id="newName" placeholder="グループ名" autocomplete="off">
+    <select id="newType">
+      <option value="normal">通常用</option>
+      <option value="kids">子供用</option>
+    </select>
     <button class="primary" id="addBtn">追加</button>
   </div>
   <div class="small" id="addMessage" style="margin-top:6px;color:#d93025"></div>
@@ -240,9 +244,11 @@ setTimeout(()=>{
 function isWaiting(g){ return g&&g.type==="waiting"; }
 function isGroup(g){ return g&&!isWaiting(g); }
 function isLanePaused(lane){ return !!(latestLaneStatus[lane]&&latestLaneStatus[lane].paused); }
-function getSortedEvents(){
-  return Object.entries(latestEvents).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).map(([,e])=>e.text||"");
+function getSortedEvents(type){
+  const obj=(latestEvents&&latestEvents[type])||{};
+  return Object.entries(obj).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).map(([,e])=>e.text||"");
 }
+function eventTypeLabel(g){ return g&&g.eventType==="kids" ? "🧒 子供用" : "👤 通常用"; }
 function getLimitMs(g){
   let ms=Number(g.limitSec);
   if(!Number.isFinite(ms)||ms<=0) ms=Number(g.timeLimitSec);
@@ -294,9 +300,17 @@ function hideResumedToastImmediately(){
 }
 
 function renderNextEvent(current){
+  const labelBox=document.getElementById("nextEventLabel");
   const box=document.getElementById("nextEventText");
-  const events=getSortedEvents();
-  if(!current || !events.length){ box.textContent="-"; return; }
+  if(!current){
+    if(labelBox) labelBox.textContent="次の異変→";
+    box.textContent="-";
+    return;
+  }
+  const type=current.g.eventType||"normal";
+  const events=getSortedEvents(type);
+  if(labelBox) labelBox.textContent="次の異変（"+(type==="kids"?"子供用":"通常用")+"）→";
+  if(!events.length){ box.textContent="-"; return; }
   const len=events.length;
   const idx=((Number(current.g.eventIndex)||0)%len+len)%len;
   box.textContent=events[idx];
@@ -355,7 +369,7 @@ function renderActive(entry,lanePaused){
   const statusLabel = lanePaused ? "⏸ 休止中" : (g.finishedAt ? "⏰ 終了・次へ待ち" : (g.startAt ? "▶ 体験中" : (g.pausedAt ? "⏸ 停止中" : "🆕 未開始")));
   const area=document.getElementById("activeArea");
   area.innerHTML=`<div class="card">
-    <div class="top"><div class="group-name">${esc(g.name||"名称未設定")}</div><span class="badge running">${statusLabel}</span></div>
+    <div class="top"><div class="group-name">${esc(g.name||"名称未設定")}</div><span class="small" style="white-space:nowrap">${eventTypeLabel(g)}</span><span class="badge running">${statusLabel}</span></div>
     <div class="stage-label">現在のステージ</div>
     <div class="stage">${Number(g.stage||0)}</div>
     <div class="controls">
@@ -408,6 +422,7 @@ function renderWaiting(waitingEntry,currentEntry,lanePaused){
   }
   box.innerHTML=`<div class="waiting-card">
     <span class="badge waitingnext">⏳ 体験待ち</span>
+    <span class="small" style="margin-left:6px">${eventTypeLabel(g)}</span>
     <div class="name">${esc(g.name||"名称未設定")}</div>
     ${nextBtn}
   </div>`;
@@ -421,13 +436,13 @@ async function act(id,g,action,card,lanePaused){
   }
   const ref=groupsRef.child(id);
   if(action==="plus"){
-    const events=getSortedEvents();
+    const events=getSortedEvents(g.eventType||"normal");
     const nextIndex=events.length?((Number(g.eventIndex)||0)+1)%events.length:0;
     await ref.update({stage:Math.max(0,Number(g.stage||0)+1),eventIndex:nextIndex});
   }
   if(action==="minus") await ref.update({stage:Math.max(0,Number(g.stage||0)-1)});
   if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")){
-    const events=getSortedEvents();
+    const events=getSortedEvents(g.eventType||"normal");
     const nextIndex=events.length?((Number(g.eventIndex)||0)+1)%events.length:0;
     await ref.update({stage:0,eventIndex:nextIndex});
   }
@@ -498,10 +513,12 @@ async function addToLane(){
   if(duplicate){ msg.textContent=`「${name}」という名前はすでに使われています。`; return; }
   const occupied=getLaneGroups(latestData,LANE);
   if(occupied.length>=2){ msg.textContent=`レーン${LANE}は満員です（体験中1組＋体験待ち1組）。`; return; }
+  const typeSelect=document.getElementById("newType");
+  const eventType=typeSelect&&typeSelect.value==="kids"?"kids":"normal";
   const now=Date.now();
   await groupsRef.push({
     type:"group",name,stage:0,limitSec:180,remainingMs:180000,
-    startAt:null,createdAt:now,lane:LANE,laneAssignedAt:now,pausedAt:null,resumedAt:null,eventIndex:0
+    startAt:null,createdAt:now,lane:LANE,laneAssignedAt:now,pausedAt:null,resumedAt:null,eventIndex:0,eventType:eventType
   });
   input.value="";
 }
