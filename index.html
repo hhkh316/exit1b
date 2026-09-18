@@ -35,8 +35,8 @@ main{padding:14px;max-width:900px;margin:auto}
 .waiting-title{font-size:18px;font-weight:900;flex:1}
 .waiting-count{font-size:30px;font-weight:900;font-variant-numeric:tabular-nums}
 .waiting-add{margin-top:10px}
-.wait-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #eee}
-.wait-item-name{flex:1;overflow-wrap:anywhere}
+.wait-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #eee;flex-wrap:wrap}
+.wait-item-name{flex:1;overflow-wrap:anywhere;min-width:140px}
 .card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:15px;margin-bottom:12px;box-shadow:0 2px 7px #0000000d}
 .top{display:flex;align-items:center;gap:8px}
 .group-name{font-size:20px;font-weight:800;flex:1;overflow-wrap:anywhere}
@@ -231,7 +231,7 @@ body.display-mode .display-board{
 </header>
 <main>
 <div id="displayBoard" class="display-board" style="display:none"></div>
-<div class="status" id="status">🟡 Firebase確認中…</div><div id="buildInfo" class="small" style="margin:-8px 0 10px">安定版（2レーン） / v2026-09-18-1</div>
+<div class="status" id="status">🟡 Firebase確認中…</div><div id="buildInfo" class="small" style="margin:-8px 0 10px">安定版（2レーン） / v2026-09-19-1</div>
 <div id="finishNotice"></div>
 <div id="laneNotice"></div>
 <div class="summary">
@@ -241,7 +241,7 @@ body.display-mode .display-board{
 </div>
 <div class="waiting">
 <div class="waiting-head"><div class="waiting-title">🧍 待ち組</div><div class="waiting-count" id="waitingCount">0</div></div>
-<div class="small">案内した組は「案内済み」で順番に消せます。</div>
+<div class="small">案内した組は「案内済み」で順番に消せます。案内時にレーンと、子供用／通常用のどちらの異変で進めるかを選んでください。</div>
 <div class="waiting-add"><input id="waitingName" placeholder="待ち組の名前" autocomplete="off"><button class="primary" id="waitingAddBtn">待ち組に追加</button></div>
 <div id="waitingList"></div>
 </div>
@@ -423,8 +423,9 @@ setTimeout(()=>{
 function isWaiting(g){ return g && g.type==="waiting"; }
 function isGroup(g){ return g && !isWaiting(g); }
 function isLanePaused(lane){ return !!(latestLaneStatus[lane]&&latestLaneStatus[lane].paused); }
-function getSortedEvents(){
-  return Object.entries(latestEvents).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).map(([,e])=>e.text||"");
+function getSortedEvents(type){
+  const obj=(latestEvents&&latestEvents[type])||{};
+  return Object.entries(obj).sort((a,b)=>(a[1].createdAt||0)-(b[1].createdAt||0)).map(([,e])=>e.text||"");
 }
 
 function getLimitMs(g){
@@ -450,6 +451,7 @@ function formatTime(ms){
   const m=Math.floor(s/60), sec=s%60;
   return String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0");
 }
+function eventTypeLabel(g){ return g.eventType==="kids" ? "🧒 子供用" : "👤 通常用"; }
 function renderSummary(data){
   const running=Object.entries(data).filter(([,g])=>isGroup(g)&&g.startAt&&!g.finishedAt);
   const el=document.getElementById("shortest");
@@ -539,7 +541,7 @@ function buildGroupCard(id,g,paused){
   const card=document.createElement("section"); card.className="card";
   const limitSec=Math.max(1,Math.round(getLimitMs(g)/1000)), rem=getRemainingMs(g);
   const pausedNoticeHtml=paused?'<div class="small" style="color:#d93025;font-weight:800;margin:-4px 0 8px">⏸ このレーンは休止中のため、タイマーの再開とステージのカウントはできません。</div>':"";
-  card.innerHTML=`<div class="top"><div class="group-name">${esc(g.name||"名称未設定")}</div><button class="danger" data-action="delete">削除</button></div>
+  card.innerHTML=`<div class="top"><div class="group-name">${esc(g.name||"名称未設定")}</div><span class="small" style="white-space:nowrap">${eventTypeLabel(g)}</span><button class="danger" data-action="delete">削除</button></div>
   ${pausedNoticeHtml}
   <div class="stage-label">現在のステージ</div><div class="stage">${Number(g.stage||0)}</div>
   <div class="controls"><button data-action="minus" ${paused?"disabled":""}>− 1</button><button class="primary" data-action="plus" ${paused?"disabled":""}>＋ 1</button><button class="reset" data-action="reset" ${paused?"disabled":""}>ステージを0に戻す</button></div>
@@ -548,6 +550,7 @@ function buildGroupCard(id,g,paused){
   <div class="timer-controls"><button class="primary" data-action="start" ${paused?"disabled":""}>${g.startAt?"一時停止から再開":"タイマー開始"}</button><button data-action="stop">停止</button><button data-action="timerReset">時間をリセット</button></div>
   <div class="limit-row"><span class="small">制限時間（分）</span><input type="number" min="1" step="1" value="${Math.max(1,Math.round(limitSec/60))}" data-limit><button data-action="setLimit">制限時間を変更</button></div>
   <div class="limit-row"><span class="small">レーン</span><select class="lane-select" data-lane-select><option value="" ${!g.lane?"selected":""}>未割り当て</option><option value="A" ${g.lane==="A"?"selected":""}>A</option><option value="B" ${g.lane==="B"?"selected":""}>B</option></select><button data-action="setLane">レーンを設定</button></div>
+  <div class="limit-row"><span class="small">異変の種類</span><select class="lane-select" data-event-type-select><option value="normal" ${(g.eventType||"normal")==="normal"?"selected":""}>通常用</option><option value="kids" ${g.eventType==="kids"?"selected":""}>子供用</option></select><button data-action="setEventType">変更</button></div>
   <div class="small" style="text-align:center;margin-top:6px">※操作内容はすべてのiPadに反映されます</div>`;
   card.querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>act(id,g,btn.dataset.action,card)));
   return card;
@@ -617,9 +620,14 @@ function renderWaiting(data){
         <option value="">レーン選択</option>
         <option value="A">A</option><option value="B">B</option>
       </select>
+      <select class="wait-type">
+        <option value="normal">通常用</option>
+        <option value="kids">子供用</option>
+      </select>
       <button class="primary">案内済み</button>`;
-    const select=row.querySelector(".wait-lane");
-    row.querySelector("button").onclick=()=>guideWaiting(id,g,select.value);
+    const laneSelect=row.querySelector(".wait-lane");
+    const typeSelect=row.querySelector(".wait-type");
+    row.querySelector("button").onclick=()=>guideWaiting(id,g,laneSelect.value,typeSelect.value);
     box.appendChild(row);
   });
 }
@@ -659,7 +667,7 @@ function showFinishNotice(data){
   }
 }
 
-function guideWaiting(id,g,lane){
+function guideWaiting(id,g,lane,eventType){
   if(!lane)return alert("案内するレーンを選んでください。");
   if(isLanePaused(lane)) return alert(`レーン${lane}は現在休止中のため案内できません。`);
   const occupied=getLaneGroups(latestData,lane);
@@ -668,10 +676,11 @@ function guideWaiting(id,g,lane){
   }
   const duplicate=Object.values(latestData).some(x=>x&&x.name===g.name&&x.type!=="waiting");
   if(duplicate)return alert(`⚠️「${g.name}」という名前はすでに使われています。`);
+  const type=eventType==="kids"?"kids":"normal";
   const now=Date.now();
   groupsRef.child(id).set({
     type:"group",name:g.name,stage:0,limitSec:180,remainingMs:180000,
-    startAt:null,createdAt:g.createdAt||now,lane:lane,laneAssignedAt:now,eventIndex:0
+    startAt:null,createdAt:g.createdAt||now,lane:lane,laneAssignedAt:now,eventIndex:0,eventType:type
   });
 }
 
@@ -736,13 +745,13 @@ async function act(id,g,action,card){
     return alert(`レーン${g.lane}は現在休止中のため、この操作はできません。`);
   }
   if(action==="plus"){
-    const events=getSortedEvents();
+    const events=getSortedEvents(g.eventType||"normal");
     const nextIndex=events.length?((Number(g.eventIndex)||0)+1)%events.length:0;
     await ref.update({stage:Math.max(0,Number(g.stage||0)+1),eventIndex:nextIndex});
   }
   if(action==="minus") await ref.update({stage:Math.max(0,Number(g.stage||0)-1)});
   if(action==="reset"&&confirm("このグループのステージ数を0に戻しますか？")){
-    const events=getSortedEvents();
+    const events=getSortedEvents(g.eventType||"normal");
     const nextIndex=events.length?((Number(g.eventIndex)||0)+1)%events.length:0;
     await ref.update({stage:0,eventIndex:nextIndex});
   }
@@ -775,6 +784,11 @@ async function act(id,g,action,card){
       }
     }
     await ref.update({lane:lane,laneAssignedAt:lane?Date.now():null});
+  }
+  if(action==="setEventType"){
+    const select=card.querySelector("[data-event-type-select]");
+    const type=select&&select.value==="kids"?"kids":"normal";
+    await ref.update({eventType:type,eventIndex:0});
   }
   if(action==="delete"&&confirm("このグループを削除しますか？")) await ref.remove();
 }
