@@ -7,6 +7,27 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:#f4f6f8;color:#17202a}
+.rainbow-banner{
+  text-align:center;
+  padding:10px 12px;
+  font-size:22px;
+  font-weight:900;
+  letter-spacing:.02em;
+  background:linear-gradient(90deg,#ff3b3b,#ff9d3b,#ffe23b,#3bff6e,#3bd1ff,#8a3bff,#ff3b9d,#ff3b3b);
+  background-size:300% auto;
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+  color:transparent;
+  animation:rainbowMove 6s linear infinite;
+}
+@keyframes rainbowMove{
+  0%{background-position:0% 50%}
+  100%{background-position:300% 50%}
+}
+@media(max-width:480px){
+  .rainbow-banner{font-size:16px}
+}
 header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #ddd;padding:14px 16px}
 h1{font-size:22px;margin:0 0 10px}
 .add,.waiting-add{display:flex;gap:8px}
@@ -98,6 +119,7 @@ body.display-mode header, body.display-mode #finishNotice, body.display-mode #la
 body.display-mode #finishedArea, body.display-mode #ranking, body.display-mode .waiting,
 body.display-mode #list, body.display-mode .status{display:none!important}
 body.display-mode main{padding:0;margin:0;max-width:none;width:100vw;height:100vh}
+body.display-mode .rainbow-banner{position:fixed;top:0;left:0;width:100%;z-index:50;background:rgba(255,255,255,.92);padding:6px 12px;font-size:18px}
 .display-board{display:grid;grid-template-columns:1fr;width:100vw;height:100vh}
 .display-lane{
   display:flex;
@@ -222,6 +244,7 @@ body.display-mode .display-board{
 </style>
 </head>
 <body>
+<div class="rainbow-banner">2026 SGfes お疲れ様！！！</div>
 <header>
 <h1>🎪 1-B 文化祭 グループ管理</h1>
 <div class="add">
