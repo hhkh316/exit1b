@@ -7,6 +7,27 @@
 <style>
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;background:#f4f6f8;color:#17202a}
+.rainbow-banner{
+  text-align:center;
+  padding:10px 12px;
+  font-size:22px;
+  font-weight:900;
+  letter-spacing:.02em;
+  background:linear-gradient(90deg,#ff3b3b,#ff9d3b,#ffe23b,#3bff6e,#3bd1ff,#8a3bff,#ff3b9d,#ff3b3b);
+  background-size:300% auto;
+  -webkit-background-clip:text;
+  background-clip:text;
+  -webkit-text-fill-color:transparent;
+  color:transparent;
+  animation:rainbowMove 6s linear infinite;
+}
+@keyframes rainbowMove{
+  0%{background-position:0% 50%}
+  100%{background-position:300% 50%}
+}
+@media(max-width:480px){
+  .rainbow-banner{font-size:16px}
+}
 header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #ddd;padding:14px 16px}
 h1{font-size:22px;margin:0 0 4px}
 .lane-switch{font-size:13px}
@@ -105,6 +126,7 @@ main{padding:14px;max-width:640px;margin:auto}
 </style>
 </head>
 <body>
+<div class="rainbow-banner">2026 SGfes お疲れ様！！！</div>
 <header>
 <h1 id="pageTitle">🎪 レーン管理</h1>
 <div class="lane-switch" id="laneSwitch"></div>
