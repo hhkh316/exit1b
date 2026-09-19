@@ -252,7 +252,7 @@ function eventTypeLabel(g){ return g&&g.eventType==="kids" ? "🧒 子供用" : 
 function getLimitMs(g){
   let ms=Number(g.limitSec);
   if(!Number.isFinite(ms)||ms<=0) ms=Number(g.timeLimitSec);
-  if(!Number.isFinite(ms)||ms<=0) ms=180;
+  if(!Number.isFinite(ms)||ms<=0) ms=120;
   return ms*1000;
 }
 function getRemainingMs(g,now=Date.now()){
@@ -517,7 +517,7 @@ async function addToLane(){
   const eventType=typeSelect&&typeSelect.value==="kids"?"kids":"normal";
   const now=Date.now();
   await groupsRef.push({
-    type:"group",name,stage:0,limitSec:180,remainingMs:180000,
+    type:"group",name,stage:0,limitSec:120,remainingMs:120000,
     startAt:null,createdAt:now,lane:LANE,laneAssignedAt:now,pausedAt:null,resumedAt:null,eventIndex:0,eventType:eventType
   });
   input.value="";
