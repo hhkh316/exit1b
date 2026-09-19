@@ -431,7 +431,7 @@ function getSortedEvents(type){
 function getLimitMs(g){
   let ms=Number(g.limitSec);
   if(!Number.isFinite(ms)||ms<=0) ms=Number(g.timeLimitSec);
-  if(!Number.isFinite(ms)||ms<=0) ms=180;
+  if(!Number.isFinite(ms)||ms<=0) ms=120;
   return ms*1000;
 }
 function getRemainingMs(g,now=Date.now()){
@@ -679,7 +679,7 @@ function guideWaiting(id,g,lane,eventType){
   const type=eventType==="kids"?"kids":"normal";
   const now=Date.now();
   groupsRef.child(id).set({
-    type:"group",name:g.name,stage:0,limitSec:180,remainingMs:180000,
+    type:"group",name:g.name,stage:0,limitSec:120,remainingMs:120000,
     startAt:null,createdAt:g.createdAt||now,lane:lane,laneAssignedAt:now,eventIndex:0,eventType:type
   });
 }
@@ -802,7 +802,7 @@ async function addGroup(){
   if(!name)return alert("グループ名を入力してください。");
   const duplicate=Object.values(latestData).some(g=>g&&String(g.name||"").trim()===name);
   if(duplicate)return alert(`⚠️「${name}」は被ってます！\\n同じ名前のグループ（または待ち組）がすでにあります。`);
-  const now=Date.now(), sec=180;
+  const now=Date.now(), sec=120;
   await groupsRef.push({type:"group",name,stage:0,limitSec:sec,remainingMs:sec*1000,startAt:null,createdAt:now,lane:"",eventIndex:0});
   input.value="";
 }
